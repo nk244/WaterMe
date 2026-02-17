@@ -5,8 +5,7 @@ import 'dart:io';
 import '../models/plant.dart';
 import '../models/log_entry.dart';
 import '../providers/plant_provider.dart';
-import '../services/database_service.dart';
-import '../services/memory_storage_service.dart';
+import '../utils/date_utils.dart';
 import 'add_plant_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -21,18 +20,17 @@ class PlantDetailScreen extends StatefulWidget {
 
 class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _db = kIsWeb ? null : DatabaseService();
-  final _memory = kIsWeb ? MemoryStorageService() : null;
   
   List<LogEntry> _wateringLogs = [];
   List<LogEntry> _fertilizerLogs = [];
   List<LogEntry> _vitalizerLogs = [];
+  DateTime? _nextWateringDate;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _loadLogs();
+    _loadData();
   }
 
   @override
@@ -41,49 +39,97 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
     super.dispose();
   }
 
-  Future<void> _loadLogs() async {
-    List<LogEntry> wateringLogs;
-    List<LogEntry> fertilizerLogs;
-    List<LogEntry> vitalizerLogs;
-    
-    if (kIsWeb) {
-      wateringLogs = await _memory!.getLogsByPlantAndType(widget.plant.id, LogType.watering);
-      fertilizerLogs = await _memory.getLogsByPlantAndType(widget.plant.id, LogType.fertilizer);
-      vitalizerLogs = await _memory.getLogsByPlantAndType(widget.plant.id, LogType.vitalizer);
-    } else {
-      wateringLogs = await _db!.getLogsByPlantAndType(widget.plant.id, LogType.watering);
-      fertilizerLogs = await _db.getLogsByPlantAndType(widget.plant.id, LogType.fertilizer);
-      vitalizerLogs = await _db.getLogsByPlantAndType(widget.plant.id, LogType.vitalizer);
-    }
-    
-    setState(() {
-      _wateringLogs = wateringLogs;
-      _fertilizerLogs = fertilizerLogs;
-      _vitalizerLogs = vitalizerLogs;
-    });
+  Future<void> _loadData() async {
+    await _loadLogs();
+    await _loadNextWateringDate();
   }
 
-  Future<void> _recordWatering() async {
-    final result = await showDialog<Map<String, dynamic>>(
+  Future<void> _loadLogs() async {
+    final provider = context.read<PlantProvider>();
+    final logs = await Future.wait([
+      provider.getAllLogsForPlantAndType(widget.plant.id, LogType.watering),
+      provider.getAllLogsForPlantAndType(widget.plant.id, LogType.fertilizer),
+      provider.getAllLogsForPlantAndType(widget.plant.id, LogType.vitalizer),
+    ]);
+    
+    if (mounted) {
+      setState(() {
+        _wateringLogs = logs[0];
+        _fertilizerLogs = logs[1];
+        _vitalizerLogs = logs[2];
+      });
+    }
+  }
+
+  Future<void> _loadNextWateringDate() async {
+    final nextDate = await context.read<PlantProvider>()
+        .calculateNextWateringDate(widget.plant.id);
+    if (mounted) {
+      setState(() {
+        _nextWateringDate = nextDate;
+      });
+    }
+  }
+
+  Future<void> _recordLog(LogType type) async {
+    final result = await _showLogDialog(type);
+    if (result == null) return;
+
+    final provider = context.read<PlantProvider>();
+    switch (type) {
+      case LogType.watering:
+        await provider.recordWatering(
+          widget.plant.id,
+          result['date'] as DateTime,
+          result['note'] as String?,
+        );
+        break;
+      case LogType.fertilizer:
+        await provider.recordFertilizer(
+          widget.plant.id,
+          result['date'] as DateTime,
+          result['note'] as String?,
+        );
+        break;
+      case LogType.vitalizer:
+        await provider.recordVitalizer(
+          widget.plant.id,
+          result['date'] as DateTime,
+          result['note'] as String?,
+        );
+        break;
+    }
+
+    await _loadData();
+    _showSuccessMessage(_getLogTypeName(type));
+  }
+
+  Future<Map<String, dynamic>?> _showLogDialog(LogType type) {
+    return showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => const _LogDialog(
-        title: '水やりを記録',
-        icon: Icons.water_drop,
+      builder: (context) => _LogDialog(
+        title: '${_getLogTypeName(type)}を記録',
+        icon: _getIconForLogType(type),
       ),
     );
+  }
 
-    if (result != null) {
-      await context.read<PlantProvider>().recordWatering(
-        widget.plant.id,
-        result['date'] as DateTime,
-        result['note'] as String?,
+  void _showSuccessMessage(String logTypeName) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${logTypeName}を記録しました')),
       );
-      await _loadLogs();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('水やりを記録しました')),
-        );
-      }
+    }
+  }
+
+  String _getLogTypeName(LogType type) {
+    switch (type) {
+      case LogType.watering:
+        return '水やり';
+      case LogType.fertilizer:
+        return '肥料';
+      case LogType.vitalizer:
+        return '活力剤';
     }
   }
 
@@ -119,8 +165,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    final bool needsWatering = widget.plant.nextWateringDate != null &&
-        widget.plant.nextWateringDate!.isBefore(DateTime.now());
+    final needsWatering = _nextWateringDate != null &&
+        !_nextWateringDate!.isAfter(AppDateUtils.getDateOnly(DateTime.now()));
 
     return Scaffold(
       appBar: AppBar(
@@ -128,16 +174,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => AddPlantScreen(plant: widget.plant),
-                ),
-              );
-              if (mounted) {
-                Navigator.of(context).pop();
-              }
-            },
+            onPressed: _navigateToEdit,
           ),
           IconButton(
             icon: const Icon(Icons.delete),
@@ -149,7 +186,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
           tabs: const [
             Tab(text: '情報'),
             Tab(text: '水やり'),
-            Tab(text: '液肥'),
+            Tab(text: '肥料'),
             Tab(text: '活力剤'),
           ],
         ),
@@ -163,145 +200,173 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
           _buildLogTab(_vitalizerLogs, LogType.vitalizer),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _recordWatering,
-        icon: const Icon(Icons.water_drop),
-        label: const Text('水やり'),
-        backgroundColor: needsWatering
-            ? Theme.of(context).colorScheme.error
-            : null,
+      floatingActionButton: _buildFloatingActionButton(needsWatering),
+    );
+  }
+
+  Widget _buildFloatingActionButton(bool needsWatering) {
+    return FloatingActionButton.extended(
+      onPressed: () => _recordLog(LogType.watering),
+      icon: const Icon(Icons.water_drop),
+      label: const Text('水やり'),
+      backgroundColor: needsWatering
+          ? Theme.of(context).colorScheme.error
+          : null,
+    );
+  }
+
+  Future<void> _navigateToEdit() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AddPlantScreen(plant: widget.plant),
       ),
     );
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   Widget _buildInfoTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (widget.plant.imagePath != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: kIsWeb
-                ? Image.network(
-                    widget.plant.imagePath!,
-                    height: 200,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 200,
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          Icons.broken_image,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      );
-                    },
-                  )
-                : File(widget.plant.imagePath!).existsSync()
-                    ? Image.file(
-                        File(widget.plant.imagePath!),
-                        height: 200,
-                        fit: BoxFit.cover,
-                      )
-                    : Container(
-                        height: 200,
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          Icons.broken_image,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
+        if (widget.plant.imagePath != null) _buildPlantImage(),
+        const SizedBox(height: 16),
+        _buildBasicInfoCard(),
+        const SizedBox(height: 16),
+        _buildWateringInfoCard(),
+      ],
+    );
+  }
+
+  Widget _buildPlantImage() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: kIsWeb
+          ? Image.network(
+              widget.plant.imagePath!,
+              height: 200,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  _buildImagePlaceholder(isError: true),
+            )
+          : File(widget.plant.imagePath!).existsSync()
+              ? Image.file(
+                  File(widget.plant.imagePath!),
+                  height: 200,
+                  fit: BoxFit.cover,
+                )
+              : _buildImagePlaceholder(isError: true),
+    );
+  }
+
+  Widget _buildImagePlaceholder({bool isError = false}) {
+    return Container(
+      height: 200,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Icon(
+        isError ? Icons.broken_image : Icons.eco,
+        size: 64,
+        color: isError
+            ? Theme.of(context).colorScheme.error
+            : Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  Widget _buildBasicInfoCard() {
+    return _InfoCard(
+      title: '基本情報',
+      children: [
+        _InfoRow(label: '植物名', value: widget.plant.name),
+        if (widget.plant.variety != null)
+          _InfoRow(label: '品種名', value: widget.plant.variety!),
+        if (widget.plant.purchaseDate != null)
+          _InfoRow(
+            label: '購入日',
+            value: DateFormat('yyyy年MM月dd日').format(widget.plant.purchaseDate!),
           ),
-        const SizedBox(height: 16),
-        
-        _InfoCard(
-          title: '基本情報',
-          children: [
-            _InfoRow(label: '植物名', value: widget.plant.name),
-            if (widget.plant.variety != null)
-              _InfoRow(label: '品種名', value: widget.plant.variety!),
-            if (widget.plant.purchaseDate != null)
-              _InfoRow(
-                label: '購入日',
-                value: DateFormat('yyyy年MM月dd日').format(widget.plant.purchaseDate!),
-              ),
-            if (widget.plant.purchaseLocation != null)
-              _InfoRow(label: '購入先', value: widget.plant.purchaseLocation!),
-          ],
-        ),
-        const SizedBox(height: 16),
-        
-        _InfoCard(
-          title: '水やり情報',
-          children: [
-            if (widget.plant.wateringIntervalDays != null)
-              _InfoRow(
-                label: '間隔',
-                value: '${widget.plant.wateringIntervalDays}日ごと',
-              ),
-            if (widget.plant.nextWateringDate != null)
-              _InfoRow(
-                label: '次回予定',
-                value: _formatDate(widget.plant.nextWateringDate!),
-                valueColor: widget.plant.nextWateringDate!.isBefore(DateTime.now())
-                    ? Theme.of(context).colorScheme.error
-                    : null,
-              ),
-          ],
-        ),
+        if (widget.plant.purchaseLocation != null)
+          _InfoRow(label: '購入先', value: widget.plant.purchaseLocation!),
+      ],
+    );
+  }
+
+  Widget _buildWateringInfoCard() {
+    return _InfoCard(
+      title: '水やり情報',
+      children: [
+        if (widget.plant.wateringIntervalDays != null)
+          _InfoRow(
+            label: '間隔',
+            value: '${widget.plant.wateringIntervalDays}日ごと',
+          ),
+        if (_nextWateringDate != null)
+          _InfoRow(
+            label: '次回予定',
+            value: AppDateUtils.formatRelativeDate(_nextWateringDate!),
+            valueColor: _nextWateringDate!.isBefore(DateTime.now())
+                ? Theme.of(context).colorScheme.error
+                : null,
+          ),
       ],
     );
   }
 
   Widget _buildLogTab(List<LogEntry> logs, LogType type) {
     if (logs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _getIconForLogType(type),
-              size: 64,
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'ログがありません',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
-        ),
-      );
+      return _buildEmptyState(type);
     }
+
+    // Sort logs by date descending (newest first)
+    final sortedLogs = List<LogEntry>.from(logs)
+      ..sort((a, b) => b.date.compareTo(a.date));
 
     return ListView.builder(
       padding: const EdgeInsets.all(8),
-      itemCount: logs.length,
-      itemBuilder: (context, index) {
-        final log = logs[index];
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          child: ListTile(
-            leading: Icon(_getIconForLogType(type)),
-            title: Text(DateFormat('yyyy年MM月dd日').format(log.date)),
-            subtitle: log.note != null ? Text(log.note!) : null,
-            trailing: IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: () async {
-                if (kIsWeb) {
-                  await _memory!.deleteLog(log.id);
-                } else {
-                  await _db!.deleteLog(log.id);
-                }
-                await _loadLogs();
-              },
-            ),
-          ),
-        );
-      },
+      itemCount: sortedLogs.length,
+      itemBuilder: (context, index) => _buildLogCard(sortedLogs[index], type),
     );
+  }
+
+  Widget _buildEmptyState(LogType type) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _getIconForLogType(type),
+            size: 64,
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'ログがありません',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogCard(LogEntry log, LogType type) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: ListTile(
+        leading: Icon(_getIconForLogType(type)),
+        title: Text(DateFormat('yyyy年MM月dd日').format(log.date)),
+        subtitle: log.note != null ? Text(log.note!) : null,
+        trailing: IconButton(
+          icon: const Icon(Icons.delete),
+          onPressed: () => _deleteLog(log.id),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteLog(String logId) async {
+    await context.read<PlantProvider>().deleteLog(logId);
+    await _loadData();
   }
 
   IconData _getIconForLogType(LogType type) {
@@ -309,23 +374,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
       case LogType.watering:
         return Icons.water_drop;
       case LogType.fertilizer:
-        return Icons.science;
+        return Icons.grass;
       case LogType.vitalizer:
-        return Icons.local_florist;
+        return Icons.favorite;
     }
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final targetDay = DateTime(date.year, date.month, date.day);
-    final difference = targetDay.difference(today).inDays;
-
-    if (difference == 0) return '今日';
-    if (difference == -1) return '昨日';
-    if (difference == 1) return '明日';
-    if (difference < 0) return '${-difference}日前';
-    return '$difference日後';
   }
 }
 
@@ -381,16 +433,20 @@ class _InfoRow extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6),
+                  ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: valueColor,
-              ),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: valueColor),
             ),
           ),
         ],

@@ -4,11 +4,10 @@ import '../providers/plant_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/app_settings.dart';
 import '../models/plant.dart';
+import '../widgets/plant_image_widget.dart';
 import 'add_plant_screen.dart';
 import 'plant_detail_screen.dart';
 import 'settings_screen.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class PlantListScreen extends StatefulWidget {
   const PlantListScreen({super.key});
@@ -32,20 +31,52 @@ class _PlantListScreenState extends State<PlantListScreen> {
       appBar: AppBar(
         title: const Text('WaterMe'),
         actions: [
+          // Sort order menu
           Consumer<SettingsProvider>(
-            builder: (context, settings, _) {
-              return IconButton(
-                icon: Icon(
-                  settings.viewMode == ViewMode.card
-                      ? Icons.view_list
-                      : Icons.grid_view,
-                ),
-                onPressed: () {
-                  settings.setViewMode(
-                    settings.viewMode == ViewMode.card
-                        ? ViewMode.list
-                        : ViewMode.card,
-                  );
+            builder: (context, settingsForMenu, _) {
+              return PopupMenuButton<PlantSortOrder>(
+                icon: const Icon(Icons.sort),
+                tooltip: '並び順',
+                onSelected: (order) {
+                  context.read<SettingsProvider>().setPlantSortOrder(order);
+                },
+                itemBuilder: (context) {
+                  final currentOrder = settingsForMenu.plantSortOrder;
+                  
+                  return PlantSortOrder.values.map((order) {
+                    return PopupMenuItem<PlantSortOrder>(
+                      value: order,
+                      child: Row(
+                        children: [
+                          Icon(
+                            _getSortOrderIcon(order),
+                            size: 20,
+                            color: currentOrder == order 
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _getSortOrderName(order),
+                              style: currentOrder == order
+                                ? TextStyle(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  )
+                                : null,
+                            ),
+                          ),
+                          if (currentOrder == order)
+                            Icon(
+                              Icons.check,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                        ],
+                      ),
+                    );
+                  }).toList();
                 },
               );
             },
@@ -97,9 +128,17 @@ class _PlantListScreenState extends State<PlantListScreen> {
 
           return Consumer<SettingsProvider>(
             builder: (context, settings, _) {
-              return settings.viewMode == ViewMode.card
-                  ? _buildCardView(plantProvider.plants)
-                  : _buildListView(plantProvider.plants);
+              final sortedPlants = plantProvider.getSortedPlants(
+                settings.plantSortOrder,
+                settings.customSortOrder,
+              );
+              
+              // カード表示機能を無効化、リスト表示のみ
+              final isCustomSort = settings.plantSortOrder == PlantSortOrder.custom;
+              
+              return isCustomSort 
+                  ? _buildReorderableListView(context, sortedPlants, settings)
+                  : _buildListView(sortedPlants);
             },
           );
         },
@@ -117,22 +156,6 @@ class _PlantListScreenState extends State<PlantListScreen> {
     );
   }
 
-  Widget _buildCardView(List<Plant> plants) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: plants.length,
-      itemBuilder: (context, index) {
-        return _PlantCard(plant: plants[index]);
-      },
-    );
-  }
-
   Widget _buildListView(List<Plant> plants) {
     return ListView.builder(
       padding: const EdgeInsets.all(8),
@@ -142,137 +165,106 @@ class _PlantListScreenState extends State<PlantListScreen> {
       },
     );
   }
-}
 
-class _PlantCard extends StatelessWidget {
-  final Plant plant;
+  Widget _buildReorderableListView(
+    BuildContext context,
+    List<Plant> plants,
+    SettingsProvider settings,
+  ) {
+    return ReorderableListView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: plants.length,
+      onReorder: (oldIndex, newIndex) {
+        _onReorder(context, plants, oldIndex, newIndex, settings);
+      },
+      proxyDecorator: (child, index, animation) {
+        return AnimatedBuilder(
+          animation: animation,
+          builder: (context, child) {
+            return Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(8),
+              child: child,
+            );
+          },
+          child: child,
+        );
+      },
+      itemBuilder: (context, index) {
+        final plant = plants[index];
+        return Container(
+          key: ValueKey(plant.id),
+          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          child: _buildReorderableListTile(plant),
+        );
+      },
+    );
+  }
 
-  const _PlantCard({required this.plant});
-
-  @override
-  Widget build(BuildContext context) {
-    final bool needsWatering = plant.nextWateringDate != null &&
-        plant.nextWateringDate!.isBefore(DateTime.now());
-
+  Widget _buildReorderableListTile(Plant plant) {
     return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => PlantDetailScreen(plant: plant),
-            ),
-          );
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: plant.imagePath != null
-                  ? (kIsWeb
-                      ? Image.network(
-                          plant.imagePath!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              child: Icon(
-                                Icons.eco,
-                                size: 48,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            );
-                          },
-                        )
-                      : File(plant.imagePath!).existsSync()
-                          ? Image.file(
-                              File(plant.imagePath!),
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              child: Icon(
-                                Icons.eco,
-                                size: 48,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ))
-                  : Container(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: Icon(
-                        Icons.eco,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    plant.name,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (plant.variety != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      plant.variety!,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (plant.nextWateringDate != null) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.water_drop,
-                          size: 16,
-                          color: needsWatering
-                              ? Theme.of(context).colorScheme.error
-                              : Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            _formatDate(plant.nextWateringDate!),
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: needsWatering
-                                  ? Theme.of(context).colorScheme.error
-                                  : null,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
+      child: ListTile(
+        leading: PlantImageWidget(plant: plant),
+        title: Text(plant.name),
+        subtitle: plant.variety != null ? Text(plant.variety!) : null,
+        trailing: const Icon(Icons.drag_handle),
+        onTap: () => _navigateToDetail(plant),
       ),
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final targetDay = DateTime(date.year, date.month, date.day);
-    final difference = targetDay.difference(today).inDays;
+  void _onReorder(
+    BuildContext context,
+    List<Plant> plants,
+    int oldIndex,
+    int newIndex,
+  SettingsProvider settings,
+  ) {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    
+    final List<String> newOrder = plants.map((p) => p.id).toList();
+    final plantId = newOrder.removeAt(oldIndex);
+    newOrder.insert(newIndex, plantId);
+    
+    settings.setCustomSortOrder(newOrder);
+  }
 
-    if (difference == 0) return '今日';
-    if (difference == -1) return '昨日';
-    if (difference == 1) return '明日';
-    if (difference < 0) return '${-difference}日前';
-    return '$difference日後';
+  void _navigateToDetail(Plant plant) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlantDetailScreen(plant: plant),
+      ),
+    );
+  }
+
+  String _getSortOrderName(PlantSortOrder order) {
+    switch (order) {
+      case PlantSortOrder.nameAsc:
+        return '名前（あ→ん）';
+      case PlantSortOrder.nameDesc:
+        return '名前（ん→あ）';
+      case PlantSortOrder.purchaseDateDesc:
+        return '購入日が新しい順';
+      case PlantSortOrder.purchaseDateAsc:
+        return '購入日が古い順';
+      case PlantSortOrder.custom:
+        return 'カスタム（ドラッグで並び替え）';
+    }
+  }
+
+  IconData _getSortOrderIcon(PlantSortOrder order) {
+    switch (order) {
+      case PlantSortOrder.nameAsc:
+      case PlantSortOrder.nameDesc:
+        return Icons.sort_by_alpha;
+      case PlantSortOrder.purchaseDateDesc:
+      case PlantSortOrder.purchaseDateAsc:
+        return Icons.calendar_today;
+      case PlantSortOrder.custom:
+        return Icons.reorder;
+    }
   }
 }
 
@@ -283,117 +275,24 @@ class _PlantListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool needsWatering = plant.nextWateringDate != null &&
-        plant.nextWateringDate!.isBefore(DateTime.now());
-
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: ListTile(
-        leading: plant.imagePath != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: kIsWeb
-                    ? Image.network(
-                        plant.imagePath!,
-                        width: 56,
-                        height: 56,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.eco,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          );
-                        },
-                      )
-                    : File(plant.imagePath!).existsSync()
-                        ? Image.file(
-                            File(plant.imagePath!),
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                          )
-                        : Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.eco,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-              )
-            : Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.eco,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
+        leading: PlantImageWidget(plant: plant),
         title: Text(plant.name),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (plant.variety != null) Text(plant.variety!),
-            if (plant.nextWateringDate != null)
-              Row(
-                children: [
-                  Icon(
-                    Icons.water_drop,
-                    size: 14,
-                    color: needsWatering
-                        ? Theme.of(context).colorScheme.error
-                        : Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _formatDate(plant.nextWateringDate!),
-                    style: TextStyle(
-                      color: needsWatering
-                          ? Theme.of(context).colorScheme.error
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => PlantDetailScreen(plant: plant),
-            ),
-          );
-        },
+        subtitle: plant.variety != null
+            ? Text(plant.variety!)
+            : null,
+        onTap: () => _navigateToDetail(context, plant),
       ),
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final targetDay = DateTime(date.year, date.month, date.day);
-    final difference = targetDay.difference(today).inDays;
-
-    if (difference == 0) return '今日';
-    if (difference == -1) return '昨日';
-    if (difference == 1) return '明日';
-    if (difference < 0) return '${-difference}日前';
-    return '$difference日後';
+  void _navigateToDetail(BuildContext context, Plant plant) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlantDetailScreen(plant: plant),
+      ),
+    );
   }
 }

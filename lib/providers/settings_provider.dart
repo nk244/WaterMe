@@ -9,6 +9,9 @@ class SettingsProvider with ChangeNotifier {
   AppSettings get settings => _settings;
   ViewMode get viewMode => _settings.viewMode;
   AppTheme get theme => _settings.theme;
+  LogTypeColors get logTypeColors => _settings.logTypeColors;
+  PlantSortOrder get plantSortOrder => _settings.plantSortOrder;
+  List<String> get customSortOrder => _settings.customSortOrder;
 
   Future<void> loadSettings() async {
     _settings = await _settingsService.loadSettings();
@@ -32,6 +35,24 @@ class SettingsProvider with ChangeNotifier {
       notificationHour: hour,
       notificationMinute: minute,
     );
+    await _settingsService.saveSettings(_settings);
+    notifyListeners();
+  }
+
+  Future<void> setLogTypeColors(LogTypeColors colors) async {
+    _settings = _settings.copyWith(logTypeColors: colors);
+    await _settingsService.saveSettings(_settings);
+    notifyListeners();
+  }
+
+  Future<void> setPlantSortOrder(PlantSortOrder order) async {
+    _settings = _settings.copyWith(plantSortOrder: order);
+    await _settingsService.saveSettings(_settings);
+    notifyListeners();
+  }
+
+  Future<void> setCustomSortOrder(List<String> order) async {
+    _settings = _settings.copyWith(customSortOrder: order);
     await _settingsService.saveSettings(_settings);
     notifyListeners();
   }

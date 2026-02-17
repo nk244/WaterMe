@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/plant_provider.dart';
 import '../models/plant.dart';
+import '../widgets/plant_image_widget.dart';
 
 class AddPlantScreen extends StatefulWidget {
   final Plant? plant;
@@ -186,52 +187,20 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                      width: 2,
+                    ),
                   ),
                   child: _imagePath != null
                       ? ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: kIsWeb
-                              ? Image.network(
-                                  _imagePath!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.error_outline,
-                                          size: 48,
-                                          color: Theme.of(context).colorScheme.error,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          '画像を読み込めません',
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                )
-                              : File(_imagePath!).existsSync()
-                                  ? Image.file(
-                                      File(_imagePath!),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.broken_image,
-                                          size: 48,
-                                          color: Theme.of(context).colorScheme.error,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'ファイルが見つかりません',
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                        ),
-                                      ],
-                                    ),
+                          borderRadius: BorderRadius.circular(10),
+                          child: PlantImageWidget(
+                            imagePath: _imagePath,
+                            width: 150,
+                            height: 150,
+                            borderRadius: BorderRadius.zero,
+                          ),
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,

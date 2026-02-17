@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io';
 import '../providers/plant_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/plant.dart';
-import '../services/database_service.dart';
-import '../services/memory_storage_service.dart';
 import '../models/log_entry.dart';
+import '../models/daily_log_status.dart';
+import '../models/app_settings.dart';
+import '../utils/date_utils.dart';
+import '../widgets/plant_image_widget.dart';
 import 'plant_detail_screen.dart';
 import 'settings_screen.dart';
 
@@ -21,7 +21,10 @@ class TodayWateringScreen extends StatefulWidget {
 
 class _TodayWateringScreenState extends State<TodayWateringScreen> {
   DateTime _selectedDate = DateTime.now();
-  Map<String, bool> _wateredToday = {};
+  DailyLogStatus _logStatus = DailyLogStatus.empty();
+  Map<String, DateTime?> _nextWateringDateCache = {};
+  Set<String> _selectedPlantIds = {};
+  Set<LogType> _selectedBulkLogTypes = {LogType.watering};
 
   @override
   void initState() {
@@ -39,89 +42,244 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
 
   Future<void> _refreshData() async {
     await context.read<PlantProvider>().loadPlants();
-    await _loadTodayWaterings();
+    await _loadTodayLogs();
   }
 
-  Future<void> _loadTodayWaterings() async {
-    final selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final startOfDay = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
-    final endOfDay = DateTime(selectedDay.year, selectedDay.month, selectedDay.day, 23, 59, 59);
-
-    final plants = context.read<PlantProvider>().plants;
-    final wateredToday = <String, bool>{};
+  Future<void> _loadTodayLogs() async {
+    final plantProvider = context.read<PlantProvider>();
+    final plants = plantProvider.plants;
+    final wateredMap = <String, bool>{};
+    final fertilizedMap = <String, bool>{};
+    final vitalizedMap = <String, bool>{};
+    final nextWateringDateCache = <String, DateTime?>{};
 
     for (var plant in plants) {
-      List<LogEntry> logs;
-      if (kIsWeb) {
-        logs = await MemoryStorageService().getLogsByPlantAndType(
-          plant.id,
-          LogType.watering,
-        );
-      } else {
-        logs = await DatabaseService().getLogsByPlantAndType(
-          plant.id,
-          LogType.watering,
-        );
-      }
+      // Calculate next watering date dynamically
+      nextWateringDateCache[plant.id] = 
+          await plantProvider.calculateNextWateringDate(plant.id);
 
-      // Check if watered on selected date
-      final selectedDateLogs = logs.where((log) =>
-          log.date.isAfter(startOfDay.subtract(const Duration(seconds: 1))) && 
-          log.date.isBefore(endOfDay.add(const Duration(seconds: 1))));
-      wateredToday[plant.id] = selectedDateLogs.isNotEmpty;
+      // Check log status for each type
+      wateredMap[plant.id] = 
+          await plantProvider.hasLogOnDate(plant.id, LogType.watering, _selectedDate);
+      fertilizedMap[plant.id] = 
+          await plantProvider.hasLogOnDate(plant.id, LogType.fertilizer, _selectedDate);
+      vitalizedMap[plant.id] = 
+          await plantProvider.hasLogOnDate(plant.id, LogType.vitalizer, _selectedDate);
     }
 
     if (mounted) {
       setState(() {
-        _wateredToday = wateredToday;
+        _logStatus = DailyLogStatus(
+          watered: wateredMap,
+          fertilized: fertilizedMap,
+          vitalized: vitalizedMap,
+        );
+        _nextWateringDateCache = nextWateringDateCache;
       });
     }
   }
 
   List<Plant> _getPlantsForDate(List<Plant> plants) {
-    final selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final today = DateTime.now();
-    final todayDay = DateTime(today.year, today.month, today.day);
+    final selectedDay = AppDateUtils.getDateOnly(_selectedDate);
+    final todayDay = AppDateUtils.getDateOnly(DateTime.now());
     
-    // Show plants that need watering on or before the selected date
-    return plants.where((plant) {
-      if (plant.nextWateringDate == null) return false;
-      final nextDay = DateTime(
-        plant.nextWateringDate!.year,
-        plant.nextWateringDate!.month,
-        plant.nextWateringDate!.day,
-      );
+    // Get plants that have any records on the selected date
+    final plantsWithRecords = plants
+        .where((plant) => _logStatus.hasAnyLog(plant.id))
+        .toSet();
+    
+    // Also show plants that need watering
+    final plantsNeedingAction = plants.where((plant) {
+      final nextWateringDate = _nextWateringDateCache[plant.id];
+      if (nextWateringDate == null) return false;
+      
+      final nextDay = AppDateUtils.getDateOnly(nextWateringDate);
       
       // For today, show all plants that need watering today or are overdue
-      if (selectedDay.isAtSameMomentAs(todayDay)) {
+      if (AppDateUtils.isSameDay(selectedDay, todayDay)) {
         return !nextDay.isAfter(selectedDay);
       }
       
       // For other dates, show plants scheduled for that specific date
       return nextDay.isAtSameMomentAs(selectedDay) || nextDay.isBefore(selectedDay);
-    }).toList()
-      ..sort((a, b) => a.nextWateringDate!.compareTo(b.nextWateringDate!));
+    }).toSet();
+    
+    // Combine both sets and convert to list
+    final allPlants = {...plantsWithRecords, ...plantsNeedingAction}.toList();
+    
+    // Sort by completion status and watering date
+    allPlants.sort((a, b) => _comparePlants(a, b));
+    
+    return allPlants;
   }
 
-  Future<void> _quickWater(Plant plant) async {
-    await context.read<PlantProvider>().recordWatering(
-      plant.id,
-      _selectedDate,
-      null,
-    );
+  int _comparePlants(Plant a, Plant b) {
+    final aCompleted = _logStatus.isWatered(a.id);
+    final bCompleted = _logStatus.isWatered(b.id);
     
-    // Reload both plants and watering status
+    // Show completed items at the bottom
+    if (aCompleted && !bCompleted) return 1;
+    if (!aCompleted && bCompleted) return -1;
+    
+    // For plants with same completion status, use settings sort order
+    final settings = context.read<SettingsProvider>();
+    final sortOrder = settings.plantSortOrder;
+    
+    switch (sortOrder) {
+      case PlantSortOrder.nameAsc:
+        return a.name.compareTo(b.name);
+      case PlantSortOrder.nameDesc:
+        return b.name.compareTo(a.name);
+      case PlantSortOrder.purchaseDateDesc:
+        if (a.purchaseDate == null && b.purchaseDate == null) return 0;
+        if (a.purchaseDate == null) return 1;
+        if (b.purchaseDate == null) return -1;
+        return b.purchaseDate!.compareTo(a.purchaseDate!);
+      case PlantSortOrder.purchaseDateAsc:
+        if (a.purchaseDate == null && b.purchaseDate == null) return 0;
+        if (a.purchaseDate == null) return 1;
+        if (b.purchaseDate == null) return -1;
+        return a.purchaseDate!.compareTo(b.purchaseDate!);
+      case PlantSortOrder.custom:
+        final customOrder = settings.customSortOrder;
+        if (customOrder.isNotEmpty) {
+          final aIndex = customOrder.indexOf(a.id);
+          final bIndex = customOrder.indexOf(b.id);
+          if (aIndex == -1 && bIndex == -1) return 0;
+          if (aIndex == -1) return 1;
+          if (bIndex == -1) return -1;
+          return aIndex.compareTo(bIndex);
+        }
+        // Fallback to watering date
+        final aNextDate = _nextWateringDateCache[a.id];
+        final bNextDate = _nextWateringDateCache[b.id];
+        if (aNextDate == null && bNextDate == null) return 0;
+        if (aNextDate == null) return 1;
+        if (bNextDate == null) return -1;
+        return aNextDate.compareTo(bNextDate);
+    }
+  }
+
+
+  Future<void> _bulkLog() async {
+    if (_selectedPlantIds.isEmpty) return;
+
+    final plantProvider = context.read<PlantProvider>();
+    
+    // Register all selected log types for each plant
+    for (final plantId in _selectedPlantIds) {
+      for (final logType in _selectedBulkLogTypes) {
+        await _recordLog(plantProvider, plantId, logType);
+      }
+    }
+
+    await _refreshAfterLogChange();
+    _showSuccessMessage(_buildLogMessage(_selectedPlantIds.length));
+  }
+
+  Future<void> _recordLog(
+    PlantProvider provider,
+    String plantId,
+    LogType logType,
+  ) async {
+    switch (logType) {
+      case LogType.watering:
+        await provider.recordWatering(plantId, _selectedDate, null);
+        break;
+      case LogType.fertilizer:
+        await provider.recordFertilizer(plantId, _selectedDate, null);
+        break;
+      case LogType.vitalizer:
+        await provider.recordVitalizer(plantId, _selectedDate, null);
+        break;
+    }
+  }
+
+  String _buildLogMessage(int count) {
+    final actionNames = _selectedBulkLogTypes
+        .map((type) => _getLogTypeName(type))
+        .join('・');
+    return '${count}件の${actionNames}を登録しました';
+  }
+
+  Future<void> _refreshAfterLogChange() async {
     await context.read<PlantProvider>().loadPlants();
-    await _loadTodayWaterings();
-    
+    await _loadTodayLogs();
+    if (mounted) {
+      setState(() {
+        _selectedPlantIds.clear();
+      });
+    }
+  }
+
+  void _showSuccessMessage(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${plant.name}に水やりしました'),
+          content: Text(message),
           duration: const Duration(seconds: 2),
         ),
       );
     }
+  }
+
+  Future<void> _deleteLog(String plantId, LogType logType) async {
+    // Check if this is watering and there are other logs
+    final hasOtherLogs = (logType == LogType.watering) &&
+        _logStatus.hasOtherLogs(plantId, LogType.watering);
+    
+    final logTypesToDelete = await _confirmDeletion(hasOtherLogs, plantId, logType);
+    if (logTypesToDelete == null) return; // Cancelled
+
+    final plantProvider = context.read<PlantProvider>();
+    await plantProvider.deleteMultipleLogsForDate(
+      plantId,
+      logTypesToDelete,
+      _selectedDate,
+    );
+
+    await _refreshAfterLogChange();
+    _showSuccessMessage(_buildDeleteMessage(logTypesToDelete, logType));
+  }
+
+  Future<List<LogType>?> _confirmDeletion(
+    bool hasOtherLogs,
+    String plantId,
+    LogType logType,
+  ) async {
+    if (!hasOtherLogs) {
+      return [logType]; // No confirmation needed
+    }
+
+    // Show confirmation dialog
+    final deleteAll = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('記録の取り消し'),
+        content: const Text('水やりを取り消します。\n肥料や活力剤の記録も一緒に取り消しますか？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('水やりのみ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('すべて取り消し'),
+          ),
+        ],
+      ),
+    );
+    
+    if (deleteAll == null) return null; // Cancelled
+    
+    return deleteAll ? _logStatus.getActiveLogTypes(plantId) : [logType];
+  }
+
+  String _buildDeleteMessage(List<LogType> deletedTypes, LogType primaryType) {
+    if (deletedTypes.length > 1) {
+      return 'すべての記録を取り消しました';
+    }
+    return '${_getLogTypeName(primaryType)}の記録を取り消しました';
   }
 
   @override
@@ -147,320 +305,848 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
           ),
         ],
       ),
-      body: Consumer<PlantProvider>(
-        builder: (context, plantProvider, _) {
-          if (plantProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final plantsForDate = _getPlantsForDate(plantProvider.plants);
-          
-          // Calculate plants that need watering today (not overdue from past)
-          final selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-          final needsWatering = plantsForDate.where((p) {
-            final nextDay = DateTime(
-              p.nextWateringDate!.year,
-              p.nextWateringDate!.month,
-              p.nextWateringDate!.day,
-            );
-            return nextDay.isAtSameMomentAs(selectedDay);
-          }).length;
-
-          final wateredCount = isToday
-              ? plantsForDate.where((p) => _wateredToday[p.id] ?? false).length
-              : 0;
-
-          return Column(
-            children: [
-              // Date selector
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed: () {
-                        setState(() {
-                          _selectedDate = _selectedDate.subtract(const Duration(days: 1));
-                        });
-                        _loadTodayWaterings();
-                      },
-                    ),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () async {
-                          final date = await showDatePicker(
-                            context: context,
-                            initialDate: _selectedDate,
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
-                          );
-                          if (date != null) {
-                            setState(() {
-                              _selectedDate = date;
-                            });
-                            _loadTodayWaterings();
-                          }
-                        },
-                        child: Column(
-                          children: [
-                            Text(
-                              isToday ? '今日' : _formatDate(_selectedDate),
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            Text(
-                              DateFormat('yyyy年M月d日').format(_selectedDate),
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      onPressed: () {
-                        setState(() {
-                          _selectedDate = _selectedDate.add(const Duration(days: 1));
-                        });
-                        _loadTodayWaterings();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
-              // Summary
-              if (isToday && needsWatering > 0)
+      body: _buildLogList(isToday),
+      floatingActionButton: _selectedPlantIds.isNotEmpty
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Log type selection chips
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.water_drop,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                      const SizedBox(width: 8),
                       Text(
-                        '今日は$needsWatering件の水やりが必要です（$wateredCount件完了）',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        ),
+                        '登録する記録',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Consumer<SettingsProvider>(
+                        builder: (context, settings, _) {
+                          final colors = settings.logTypeColors;
+                          return Wrap(
+                            spacing: 8,
+                            children: [
+                              FilterChip(
+                                label: const Text('水やり'),
+                                avatar: const Icon(Icons.water_drop, size: 18),
+                                selected: _selectedBulkLogTypes.contains(LogType.watering),
+                                selectedColor: Color(colors.wateringBg),
+                                checkmarkColor: Color(colors.wateringFg),
+                                labelStyle: TextStyle(
+                                  color: _selectedBulkLogTypes.contains(LogType.watering)
+                                      ? Color(colors.wateringFg)
+                                      : null,
+                                  fontWeight: _selectedBulkLogTypes.contains(LogType.watering)
+                                      ? FontWeight.w600
+                                      : null,
+                                ),
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedBulkLogTypes.add(LogType.watering);
+                                    } else if (_selectedBulkLogTypes.length > 1) {
+                                      _selectedBulkLogTypes.remove(LogType.watering);
+                                    }
+                                  });
+                                },
+                              ),
+                              FilterChip(
+                                label: const Text('肥料'),
+                                avatar: const Icon(Icons.grass, size: 18),
+                                selected: _selectedBulkLogTypes.contains(LogType.fertilizer),
+                                selectedColor: Color(colors.fertilizerBg),
+                                checkmarkColor: Color(colors.fertilizerFg),
+                                labelStyle: TextStyle(
+                                  color: _selectedBulkLogTypes.contains(LogType.fertilizer)
+                                      ? Color(colors.fertilizerFg)
+                                      : null,
+                                  fontWeight: _selectedBulkLogTypes.contains(LogType.fertilizer)
+                                      ? FontWeight.w600
+                                      : null,
+                                ),
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedBulkLogTypes.add(LogType.fertilizer);
+                                    } else if (_selectedBulkLogTypes.length > 1) {
+                                      _selectedBulkLogTypes.remove(LogType.fertilizer);
+                                    }
+                                  });
+                                },
+                              ),
+                              FilterChip(
+                                label: const Text('活力剤'),
+                                avatar: const Icon(Icons.favorite, size: 18),
+                                selected: _selectedBulkLogTypes.contains(LogType.vitalizer),
+                                selectedColor: Color(colors.vitalizerBg),
+                                checkmarkColor: Color(colors.vitalizerFg),
+                                labelStyle: TextStyle(
+                                  color: _selectedBulkLogTypes.contains(LogType.vitalizer)
+                                      ? Color(colors.vitalizerFg)
+                                      : null,
+                                  fontWeight: _selectedBulkLogTypes.contains(LogType.vitalizer)
+                                      ? FontWeight.w600
+                                      : null,
+                                ),
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedBulkLogTypes.add(LogType.vitalizer);
+                                    } else if (_selectedBulkLogTypes.length > 1) {
+                                      _selectedBulkLogTypes.remove(LogType.vitalizer);
+                                    }
+                                  });
+                                },
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 8),
+                // Action button
+                FloatingActionButton.extended(
+                  onPressed: _bulkLog,
+                  icon: const Icon(Icons.check),
+                  label: Text('${_selectedPlantIds.length}件登録'),
+                ),
+              ],
+            )
+          : null,
+    );
+  }
 
-              // Plant list
-              Expanded(
-                child: plantsForDate.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.eco_outlined,
-                              size: 64,
-                              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              isToday ? '今日は水やりの予定がありません' : 'この日は水やりの予定がありません',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(8),
-                        itemCount: plantsForDate.length,
-                        itemBuilder: (context, index) {
-                          final plant = plantsForDate[index];
-                          final isWatered = _wateredToday[plant.id] ?? false;
-                          final selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-                          final nextDay = DateTime(
-                            plant.nextWateringDate!.year,
-                            plant.nextWateringDate!.month,
-                            plant.nextWateringDate!.day,
-                          );
-                          final isOverdue = nextDay.isBefore(selectedDay);
+  Widget _buildLogList(bool isToday) {
+    return Consumer<PlantProvider>(
+      builder: (context, plantProvider, _) {
+        if (plantProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                            child: ListTile(
-                              leading: Stack(
-                                children: [
-                                  _buildPlantImage(plant),
-                                  if (isWatered)
-                                    Positioned(
-                                      right: 0,
-                                      bottom: 0,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.primary,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          Icons.check,
-                                          size: 16,
-                                          color: Theme.of(context).colorScheme.onPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              title: Text(
-                                plant.name,
-                                style: TextStyle(
-                                  decoration: isWatered ? TextDecoration.lineThrough : null,
-                                  color: isWatered
-                                      ? Theme.of(context).colorScheme.onSurface.withOpacity(0.5)
-                                      : null,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (plant.variety != null) Text(plant.variety!),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.water_drop,
-                                        size: 14,
-                                        color: isOverdue
-                                            ? Theme.of(context).colorScheme.error
-                                            : Theme.of(context).colorScheme.primary,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _formatDateDifference(plant.nextWateringDate!),
-                                        style: TextStyle(
-                                          color: isOverdue
-                                              ? Theme.of(context).colorScheme.error
-                                              : null,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              trailing: isToday && !isWatered
-                                  ? IconButton(
-                                      icon: const Icon(Icons.water_drop),
-                                      color: Theme.of(context).colorScheme.primary,
-                                      onPressed: () => _quickWater(plant),
-                                    )
-                                  : null,
-                              onTap: () async {
-                                await Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => PlantDetailScreen(plant: plant),
-                                  ),
-                                );
-                                if (mounted) {
-                                  await context.read<PlantProvider>().loadPlants();
-                                  await _loadTodayWaterings();
-                                }
-                              },
-                            ),
-                          );
-                        },
-                      ),
+        final plantsForDate = _getPlantsForDate(plantProvider.plants);
+
+        return Column(
+          children: [
+            _buildDateSelector(isToday),
+            if (_logStatus.hasAnyRecords) _buildSummary(),
+            Expanded(
+              child: _buildPlantList(plantsForDate, isToday),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDateSelector(bool isToday) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: () => _changeDate(-1),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: _selectDate,
+              child: Column(
+                children: [
+                  Text(
+                    isToday ? '今日' : AppDateUtils.formatRelativeDate(_selectedDate),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Text(
+                    DateFormat('yyyy年M月d日').format(_selectedDate),
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ),
-            ],
-          );
-        },
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: () => _changeDate(1),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildPlantImage(Plant plant) {
-    if (plant.imagePath == null) {
-      return Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          Icons.eco,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      );
-    }
+  void _changeDate(int days) {
+    setState(() {
+      _selectedDate = _selectedDate.add(Duration(days: days));
+      _selectedPlantIds.clear();
+    });
+    _loadTodayLogs();
+  }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: kIsWeb
-          ? Image.network(
-              plant.imagePath!,
-              width: 56,
-              height: 56,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.eco,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                );
-              },
-            )
-          : File(plant.imagePath!).existsSync()
-              ? Image.file(
-                  File(plant.imagePath!),
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.cover,
-                )
-              : Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.eco,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
+  Future<void> _selectDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date != null) {
+      setState(() {
+        _selectedDate = date;
+        _selectedPlantIds.clear();
+      });
+      _loadTodayLogs();
+    }
+  }
+
+  Widget _buildSummary() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: [
+          if (_logStatus.wateredCount > 0)
+            _buildSummaryItem(
+              Icons.water_drop,
+              '${_logStatus.wateredCount}件の水やり',
+            ),
+          if (_logStatus.fertilizedCount > 0)
+            _buildSummaryItem(
+              Icons.grass,
+              '${_logStatus.fertilizedCount}件の肥料',
+            ),
+          if (_logStatus.vitalizedCount > 0)
+            _buildSummaryItem(
+              Icons.favorite,
+              '${_logStatus.vitalizedCount}件の活力剤',
+            ),
+        ],
+      ),
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final targetDay = DateTime(date.year, date.month, date.day);
-    final difference = targetDay.difference(today).inDays;
-
-    if (difference == 0) return '今日';
-    if (difference == -1) return '昨日';
-    if (difference == 1) return '明日';
-    return DateFormat('M月d日').format(date);
+  Widget _buildSummaryItem(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+              ),
+        ),
+      ],
+    );
   }
 
-  String _formatDateDifference(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final targetDay = DateTime(date.year, date.month, date.day);
-    final difference = targetDay.difference(today).inDays;
+  Widget _buildPlantList(List<Plant> plantsForDate, bool isToday) {
+    if (plantsForDate.isEmpty) {
+      return _buildEmptyState(isToday);
+    }
 
-    if (difference == 0) return '今日';
-    if (difference == -1) return '昨日（期限切れ）';
-    if (difference == 1) return '明日';
-    if (difference < 0) return '${-difference}日前（期限切れ）';
-    return '$difference日後';
+    // Separate into completed and incomplete
+    final incompletePlants = plantsForDate
+        .where((plant) => !_logStatus.isWatered(plant.id))
+        .toList();
+    final completedPlants = plantsForDate
+        .where((plant) => _logStatus.isWatered(plant.id))
+        .toList();
+
+    return Column(
+      children: [
+        if (incompletePlants.isNotEmpty) _buildBulkSelectionHeader(incompletePlants),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80),
+            itemCount: incompletePlants.length + 
+                       (completedPlants.isNotEmpty ? 1 : 0) + 
+                       completedPlants.length,
+            itemBuilder: (context, index) {
+              // Incomplete plants section
+              if (index < incompletePlants.length) {
+                return _buildPlantCard(incompletePlants[index]);
+              }
+              
+              // Divider between incomplete and complete
+              if (index == incompletePlants.length && completedPlants.isNotEmpty) {
+                return _buildDivider();
+              }
+              
+              // Completed plants section
+              final completedIndex = index - incompletePlants.length - (completedPlants.isNotEmpty ? 1 : 0);
+              return _buildPlantCard(completedPlants[completedIndex]);
+            },
+          ),
+        ),
+        _buildAddUnscheduledWateringButton(),
+      ],
+    );
+  }
+
+  Widget _buildBulkSelectionHeader(List<Plant> incompletePlants) {
+    final allSelected = incompletePlants.every((plant) => _selectedPlantIds.contains(plant.id));
+    final someSelected = _selectedPlantIds.isNotEmpty && !allSelected;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            value: allSelected,
+            tristate: true,
+            onChanged: (value) {
+              setState(() {
+                if (allSelected || someSelected) {
+                  // Unselect all
+                  _selectedPlantIds.clear();
+                } else {
+                  // Select all incomplete plants
+                  _selectedPlantIds.addAll(
+                    incompletePlants.map((plant) => plant.id),
+                  );
+                }
+              });
+            },
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _selectedPlantIds.isEmpty
+                  ? 'すべて選択'
+                  : '${_selectedPlantIds.length}件選択中',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          if (_selectedPlantIds.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _selectedPlantIds.clear();
+                });
+              },
+              child: const Text('選択解除'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isToday) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.eco_outlined,
+            size: 64,
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            isToday ? '今日は水やりの予定と記録がありません' : 'この日は水やりの予定と記録がありません',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: _showUnscheduledWateringDialog,
+            icon: const Icon(Icons.add),
+            label: const Text('その他の植物に水やり'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Divider(
+              thickness: 2,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '水やり完了',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Divider(
+              thickness: 2,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddUnscheduledWateringButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: SafeArea(
+        top: false,
+        child: OutlinedButton.icon(
+          onPressed: _showUnscheduledWateringDialog,
+          icon: const Icon(Icons.add),
+          label: const Text('その他の植物に水やり'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            minimumSize: const Size(double.infinity, 48),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showUnscheduledWateringDialog() async {
+    final plantProvider = context.read<PlantProvider>();
+    final allPlants = plantProvider.plants;
+    final plantsForDate = _getPlantsForDate(allPlants).toSet();
+    
+    // Get plants not in today's list
+    final unscheduledPlants = allPlants
+        .where((plant) => !plantsForDate.contains(plant))
+        .toList();
+    
+    if (unscheduledPlants.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('すべての植物が表示されています')),
+        );
+      }
+      return;
+    }
+
+    final selectedPlant = await showDialog<Plant>(
+      context: context,
+      builder: (context) => _UnscheduledWateringDialog(
+        plants: unscheduledPlants,
+      ),
+    );
+
+    if (selectedPlant != null && mounted) {
+      // Show log type selection dialog
+      final selectedLogTypes = await showDialog<Set<LogType>>(
+        context: context,
+        builder: (context) => _LogTypeSelectionDialog(),
+      );
+
+      if (selectedLogTypes != null && selectedLogTypes.isNotEmpty && mounted) {
+        // Record selected log types for the plant
+        for (final logType in selectedLogTypes) {
+          await _recordLog(plantProvider, selectedPlant.id, logType);
+        }
+        await _refreshAfterLogChange();
+        
+        final logTypeNames = selectedLogTypes
+            .map((type) => _getLogTypeName(type))
+            .join('・');
+        _showSuccessMessage('${selectedPlant.name}に${logTypeNames}を記録しました');
+      }
+    }
+  }
+
+  Widget _buildPlantCard(Plant plant) {
+    final isWatered = _logStatus.isWatered(plant.id);
+    final isFertilized = _logStatus.isFertilized(plant.id);
+    final isVitalized = _logStatus.isVitalized(plant.id);
+    final hasAnyLog = _logStatus.hasAnyLog(plant.id);
+    final isSelected = _selectedPlantIds.contains(plant.id);
+    final selectedDay = AppDateUtils.getDateOnly(_selectedDate);
+    final nextWateringDate = _nextWateringDateCache[plant.id];
+    final nextDay = nextWateringDate != null
+        ? AppDateUtils.getDateOnly(nextWateringDate)
+        : null;
+    final isOverdue = nextDay != null && nextDay.isBefore(selectedDay);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      elevation: isSelected ? 4 : 1,
+      color: isSelected
+          ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+          : null,
+      child: ListTile(
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!hasAnyLog)
+              Checkbox(
+                value: isSelected,
+                onChanged: (value) => _togglePlantSelection(plant.id, value),
+              ),
+            PlantImageWidget(plant: plant),
+          ],
+        ),
+        title: Text(plant.name),
+        subtitle: _buildPlantSubtitle(
+          plant,
+          nextWateringDate,
+          isOverdue,
+          hasAnyLog,
+          isWatered,
+          isFertilized,
+          isVitalized,
+        ),
+        onTap: () => _navigateToPlantDetail(plant),
+      ),
+    );
+  }
+
+  void _togglePlantSelection(String plantId, bool? value) {
+    setState(() {
+      if (value == true) {
+        _selectedPlantIds.add(plantId);
+      } else {
+        _selectedPlantIds.remove(plantId);
+      }
+    });
+  }
+
+  Widget _buildPlantSubtitle(
+    Plant plant,
+    DateTime? nextWateringDate,
+    bool isOverdue,
+    bool hasAnyLog,
+    bool isWatered,
+    bool isFertilized,
+    bool isVitalized,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (plant.variety != null) Text(plant.variety!),
+        if (nextWateringDate != null)
+          Row(
+            children: [
+              Icon(
+                Icons.water_drop,
+                size: 14,
+                color: isOverdue
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                AppDateUtils.formatDateDifference(nextWateringDate),
+                style: TextStyle(
+                  color: isOverdue ? Theme.of(context).colorScheme.error : null,
+                ),
+              ),
+            ],
+          ),
+        if (hasAnyLog)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                if (isWatered) _buildLogChip(plant.id, LogType.watering),
+                if (isFertilized) _buildLogChip(plant.id, LogType.fertilizer),
+                if (isVitalized) _buildLogChip(plant.id, LogType.vitalizer),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildLogChip(String plantId, LogType logType) {
+    final config = _getLogChipConfig(logType);
+    return ActionChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            config.label,
+            style: TextStyle(
+              fontSize: 11,
+              color: config.foregroundColor(context),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            Icons.close,
+            size: 12,
+            color: config.foregroundColor(context),
+          ),
+        ],
+      ),
+      avatar: Icon(
+        config.icon,
+        size: 14,
+        color: config.foregroundColor(context),
+      ),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: EdgeInsets.zero,
+      backgroundColor: config.backgroundColor(context),
+      onPressed: () => _deleteLog(plantId, logType),
+    );
+  }
+
+  _LogChipConfig _getLogChipConfig(LogType logType) {
+    final colors = context.read<SettingsProvider>().logTypeColors;
+    
+    switch (logType) {
+      case LogType.watering:
+        return _LogChipConfig(
+          label: '水やり',
+          icon: Icons.water_drop,
+          backgroundColor: (context) => Color(colors.wateringBg),
+          foregroundColor: (context) => Color(colors.wateringFg),
+        );
+      case LogType.fertilizer:
+        return _LogChipConfig(
+          label: '肥料',
+          icon: Icons.grass,
+          backgroundColor: (context) => Color(colors.fertilizerBg),
+          foregroundColor: (context) => Color(colors.fertilizerFg),
+        );
+      case LogType.vitalizer:
+        return _LogChipConfig(
+          label: '活力剤',
+          icon: Icons.favorite,
+          backgroundColor: (context) => Color(colors.vitalizerBg),
+          foregroundColor: (context) => Color(colors.vitalizerFg),
+        );
+    }
+  }
+
+  Future<void> _navigateToPlantDetail(Plant plant) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlantDetailScreen(plant: plant),
+      ),
+    );
+    if (mounted) {
+      await context.read<PlantProvider>().loadPlants();
+      await _loadTodayLogs();
+    }
+  }
+
+  String _getLogTypeName(LogType type) {
+    switch (type) {
+      case LogType.watering:
+        return '水やり';
+      case LogType.fertilizer:
+        return '肥料';
+      case LogType.vitalizer:
+        return '活力剤';
+    }
+  }
+}
+
+/// Configuration for log type chips
+class _LogChipConfig {
+  final String label;
+  final IconData icon;
+  final Color Function(BuildContext) backgroundColor;
+  final Color Function(BuildContext) foregroundColor;
+
+  _LogChipConfig({
+    required this.label,
+    required this.icon,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+}
+
+/// Dialog for selecting log types to record
+class _LogTypeSelectionDialog extends StatefulWidget {
+  const _LogTypeSelectionDialog();
+
+  @override
+  State<_LogTypeSelectionDialog> createState() => _LogTypeSelectionDialogState();
+}
+
+class _LogTypeSelectionDialogState extends State<_LogTypeSelectionDialog> {
+  final Set<LogType> _selectedTypes = {LogType.watering};
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('記録する内容を選択'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CheckboxListTile(
+            value: _selectedTypes.contains(LogType.watering),
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedTypes.add(LogType.watering);
+                } else if (_selectedTypes.length > 1) {
+                  _selectedTypes.remove(LogType.watering);
+                }
+              });
+            },
+            title: const Text('水やり'),
+            secondary: const Icon(Icons.water_drop),
+          ),
+          CheckboxListTile(
+            value: _selectedTypes.contains(LogType.fertilizer),
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedTypes.add(LogType.fertilizer);
+                } else if (_selectedTypes.length > 1) {
+                  _selectedTypes.remove(LogType.fertilizer);
+                }
+              });
+            },
+            title: const Text('肥料'),
+            secondary: const Icon(Icons.grass),
+          ),
+          CheckboxListTile(
+            value: _selectedTypes.contains(LogType.vitalizer),
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedTypes.add(LogType.vitalizer);
+                } else if (_selectedTypes.length > 1) {
+                  _selectedTypes.remove(LogType.vitalizer);
+                }
+              });
+            },
+            title: const Text('活力剤'),
+            secondary: const Icon(Icons.favorite),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_selectedTypes),
+          child: const Text('記録する'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Dialog for selecting unscheduled plants to water
+class _UnscheduledWateringDialog extends StatefulWidget {
+  final List<Plant> plants;
+
+  const _UnscheduledWateringDialog({required this.plants});
+
+  @override
+  State<_UnscheduledWateringDialog> createState() => _UnscheduledWateringDialogState();
+}
+
+class _UnscheduledWateringDialogState extends State<_UnscheduledWateringDialog> {
+  String _searchQuery = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredPlants = widget.plants
+        .where((plant) =>
+            plant.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            (plant.variety?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false))
+        .toList();
+
+    return AlertDialog(
+      title: const Text('その他の植物に水やり'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                labelText: '検索',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: filteredPlants.isEmpty
+                  ? const Center(child: Text('植物が見つかりません'))
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: filteredPlants.length,
+                      itemBuilder: (context, index) {
+                        final plant = filteredPlants[index];
+                        return ListTile(
+                          leading: PlantImageWidget(plant: plant, width: 40, height: 40),
+                          title: Text(plant.name),
+                          subtitle: plant.variety != null ? Text(plant.variety!) : null,
+                          onTap: () => Navigator.of(context).pop(plant),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+      ],
+    );
   }
 }

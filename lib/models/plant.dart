@@ -6,7 +6,6 @@ class Plant {
   final String? purchaseLocation;
   final String? imagePath;
   final int? wateringIntervalDays;
-  final DateTime? nextWateringDate;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -18,7 +17,6 @@ class Plant {
     this.purchaseLocation,
     this.imagePath,
     this.wateringIntervalDays,
-    this.nextWateringDate,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -32,7 +30,6 @@ class Plant {
       'purchaseLocation': purchaseLocation,
       'imagePath': imagePath,
       'wateringIntervalDays': wateringIntervalDays,
-      'nextWateringDate': nextWateringDate?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -49,9 +46,6 @@ class Plant {
       purchaseLocation: map['purchaseLocation'],
       imagePath: map['imagePath'],
       wateringIntervalDays: map['wateringIntervalDays'],
-      nextWateringDate: map['nextWateringDate'] != null
-          ? DateTime.parse(map['nextWateringDate'])
-          : null,
       createdAt: DateTime.parse(map['createdAt']),
       updatedAt: DateTime.parse(map['updatedAt']),
     );
@@ -64,7 +58,6 @@ class Plant {
     String? purchaseLocation,
     String? imagePath,
     int? wateringIntervalDays,
-    DateTime? nextWateringDate,
     DateTime? updatedAt,
   }) {
     return Plant(
@@ -75,7 +68,6 @@ class Plant {
       purchaseLocation: purchaseLocation ?? this.purchaseLocation,
       imagePath: imagePath ?? this.imagePath,
       wateringIntervalDays: wateringIntervalDays ?? this.wateringIntervalDays,
-      nextWateringDate: nextWateringDate ?? this.nextWateringDate,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );

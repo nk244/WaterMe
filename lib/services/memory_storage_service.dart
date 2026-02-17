@@ -1,6 +1,7 @@
 import '../models/plant.dart';
 import '../models/log_entry.dart';
 import '../models/diary_entry.dart';
+import '../data/test_data_generator.dart';
 
 class MemoryStorageService {
   static final MemoryStorageService _instance = MemoryStorageService._internal();
@@ -9,11 +10,26 @@ class MemoryStorageService {
     return _instance;
   }
 
-  MemoryStorageService._internal();
+  MemoryStorageService._internal() {
+    _initializeTestData();
+  }
 
   final List<Plant> _plants = [];
   final List<LogEntry> _logs = [];
   final List<DiaryEntry> _diaries = [];
+  bool _isInitialized = false;
+
+  void _initializeTestData() {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
+    // テストデータ生成クラスを使用してデータを作成
+    final testPlants = TestDataGenerator.generateTestPlants();
+    final testLogs = TestDataGenerator.generateTestLogs(testPlants);
+
+    _plants.addAll(testPlants);
+    _logs.addAll(testLogs);
+  }
 
   // Plant operations
   Future<void> insertPlant(Plant plant) async {

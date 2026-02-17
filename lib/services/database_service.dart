@@ -46,7 +46,6 @@ class DatabaseService {
         purchaseLocation TEXT,
         imagePath TEXT,
         wateringIntervalDays INTEGER,
-        nextWateringDate TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )

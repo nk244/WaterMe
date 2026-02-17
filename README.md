@@ -15,7 +15,9 @@ WaterMeは、植物の水やりスケジュールを管理し、日々の記録�
 - 💧 **水やり履歴** - 過去の水やり記録を日付ごとに確認
 - 🌱 **肥料・活力剤の記録** - 水やり以外のケアも記録可能
 - 📸 **画像アップロード** - 植物の写真を登録（Web対応）
-- 🎨 **テーマ切り替え** - 4種類のカラーテーマから選択可能
+- 🎨 **カスタマイズ可能な色設定** - 水やり・肥料・活力剤の色を個別に設定
+- 🔄 **柔軟な並び替え機能** - 名前順、購入日順、カスタム順で植物を整理
+- 📱 **リスト表示** - 見やすい1列レイアウト
 - 📱 **マルチプラットフォーム** - Android、iOS、Webに対応
 
 ## 開発環境のセットアップ
@@ -166,6 +168,8 @@ flutter run -d <device-id>
 ```
 lib/
 ├── main.dart                      # アプリのエントリーポイント
+├── data/                          # テストデータ
+│   └── test_data_generator.dart  # テストデータ生成（開発用）
 ├── models/                        # データモデル
 │   ├── plant.dart                # 植物モデル
 │   ├── log_entry.dart            # ログエントリモデル
@@ -177,16 +181,18 @@ lib/
 ├── screens/                       # 画面UI
 │   ├── home_screen.dart          # ホーム画面（タブナビゲーション）
 │   ├── today_watering_screen.dart # 今日の水やり画面
-│   ├── plant_list_screen.dart    # 植物一覧画面
+│   ├── plant_list_screen.dart    # 植物一覧画面（並び替え機能付き）
 │   ├── add_plant_screen.dart     # 植物追加・編集画面
 │   ├── plant_detail_screen.dart  # 植物詳細画面
-│   └── settings_screen.dart      # 設定画面
+│   └── settings_screen.dart      # 設定画面（色設定含む）
 ├── services/                      # データ永続化
 │   ├── database_service.dart     # SQLite（モバイル用）
 │   ├── memory_storage_service.dart # メモリストレージ（Web用）
 │   └── settings_service.dart     # 設定サービス
-└── theme/                         # テーマ設定
-    └── app_themes.dart           # アプリテーマ定義
+├── theme/                         # テーマ設定
+│   └── app_themes.dart           # アプリテーマ定義
+└── widgets/                       # 再利用可能なウィジェット
+    └── plant_image_widget.dart   # 植物画像表示ウィジェット
 ```
 
 ## 使用技術
@@ -255,7 +261,9 @@ Web版では画像がメモリに保存されるため、ページをリロー�
 - [ ] データのエクスポート/インポート機能
 - [ ] クラウド同期機能
 - [ ] ウィジェット対応
-- [ ] ダークモードの強化
+- [x] カスタム並び替え機能（ドラッグ&ドロップ）
+- [x] ログタイプ別色設定機能
+- [x] テストデータ分離
 
 ## 貢献
 
