@@ -1,0 +1,216 @@
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import '../models/plant.dart';
+import '../models/log_entry.dart';
+import '../models/diary_entry.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+class DatabaseService {
+  static final DatabaseService _instance = DatabaseService._internal();
+  static Database? _database;
+
+  factory DatabaseService() {
+    return _instance;
+  }
+
+  DatabaseService._internal();
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDatabase();
+    return _database!;
+  }
+
+  Future<Database> _initDatabase() async {
+    if (kIsWeb) {
+      throw UnsupportedError(
+        'Database is not supported on the web. '
+        'Please use Android or iOS for full functionality.',
+      );
+    }
+    String path = join(await getDatabasesPath(), 'water_me.db');
+    return await openDatabase(
+      path,
+      version: 1,
+      onCreate: _onCreate,
+    );
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE plants(
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        variety TEXT,
+        purchaseDate TEXT,
+        purchaseLocation TEXT,
+        imagePath TEXT,
+        wateringIntervalDays INTEGER,
+        nextWateringDate TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE logs(
+        id TEXT PRIMARY KEY,
+        plantId TEXT NOT NULL,
+        type TEXT NOT NULL,
+        date TEXT NOT NULL,
+        note TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY (plantId) REFERENCES plants (id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE diary_entries(
+        id TEXT PRIMARY KEY,
+        plantId TEXT NOT NULL,
+        date TEXT NOT NULL,
+        text TEXT,
+        imagePaths TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY (plantId) REFERENCES plants (id) ON DELETE CASCADE
+      )
+    ''');
+  }
+
+  // Plant CRUD operations
+  Future<void> insertPlant(Plant plant) async {
+    final db = await database;
+    await db.insert('plants', plant.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Plant>> getAllPlants() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('plants',
+        orderBy: 'updatedAt DESC');
+    return List.generate(maps.length, (i) => Plant.fromMap(maps[i]));
+  }
+
+  Future<Plant?> getPlant(String id) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'plants',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (maps.isEmpty) return null;
+    return Plant.fromMap(maps.first);
+  }
+
+  Future<void> updatePlant(Plant plant) async {
+    final db = await database;
+    await db.update(
+      'plants',
+      plant.toMap(),
+      where: 'id = ?',
+      whereArgs: [plant.id],
+    );
+  }
+
+  Future<void> deletePlant(String id) async {
+    final db = await database;
+    await db.delete(
+      'plants',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // Log CRUD operations
+  Future<void> insertLog(LogEntry log) async {
+    final db = await database;
+    await db.insert('logs', log.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<LogEntry>> getLogsByPlant(String plantId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'logs',
+      where: 'plantId = ?',
+      whereArgs: [plantId],
+      orderBy: 'date DESC',
+    );
+    return List.generate(maps.length, (i) => LogEntry.fromMap(maps[i]));
+  }
+
+  Future<List<LogEntry>> getLogsByPlantAndType(
+      String plantId, LogType type) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'logs',
+      where: 'plantId = ? AND type = ?',
+      whereArgs: [plantId, type.name],
+      orderBy: 'date DESC',
+    );
+    return List.generate(maps.length, (i) => LogEntry.fromMap(maps[i]));
+  }
+
+  Future<void> updateLog(LogEntry log) async {
+    final db = await database;
+    await db.update(
+      'logs',
+      log.toMap(),
+      where: 'id = ?',
+      whereArgs: [log.id],
+    );
+  }
+
+  Future<void> deleteLog(String id) async {
+    final db = await database;
+    await db.delete(
+      'logs',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // Diary CRUD operations
+  Future<void> insertDiary(DiaryEntry diary) async {
+    final db = await database;
+    await db.insert('diary_entries', diary.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<DiaryEntry>> getDiariesByPlant(String plantId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'diary_entries',
+      where: 'plantId = ?',
+      whereArgs: [plantId],
+      orderBy: 'date DESC',
+    );
+    return List.generate(maps.length, (i) => DiaryEntry.fromMap(maps[i]));
+  }
+
+  Future<void> updateDiary(DiaryEntry diary) async {
+    final db = await database;
+    await db.update(
+      'diary_entries',
+      diary.toMap(),
+      where: 'id = ?',
+      whereArgs: [diary.id],
+    );
+  }
+
+  Future<void> deleteDiary(String id) async {
+    final db = await database;
+    await db.delete(
+      'diary_entries',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> close() async {
+    final db = await database;
+    db.close();
+  }
+}
