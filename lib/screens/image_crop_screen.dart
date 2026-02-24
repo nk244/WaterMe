@@ -19,7 +19,6 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
 
   @override
   void dispose() {
-    _controller.dispose();
     super.dispose();
   }
 

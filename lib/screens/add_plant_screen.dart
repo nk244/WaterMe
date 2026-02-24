@@ -51,50 +51,6 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    try {
-      // Deprecated: use _showImageSourceOptions to choose source
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 2048, maxHeight: 2048);
-
-      if (pickedFile != null) {
-        if (kIsWeb) {
-          setState(() => _imagePath = pickedFile.path);
-          return;
-        }
-
-        // For mobile: optionally allow cropping to square
-        final cropped = await ImageCropper().cropImage(
-          sourcePath: pickedFile.path,
-          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-          uiSettings: [
-            AndroidUiSettings(
-              toolbarTitle: '画像をトリミング',
-              initAspectRatio: CropAspectRatioPreset.square,
-              lockAspectRatio: true,
-            ),
-            IOSUiSettings(
-              title: '画像をトリミング',
-              aspectRatioLockEnabled: true,
-            ),
-          ],
-        );
-
-        final toSavePath = cropped?.path ?? pickedFile.path;
-        final appDir = await getApplicationDocumentsDirectory();
-        final fileName = path.basename(toSavePath);
-        final savedImage = await File(toSavePath).copy('${appDir.path}/$fileName');
-        setState(() => _imagePath = savedImage.path);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('画像の選択に失敗しました: $e')),
-        );
-      }
-    }
-  }
-
   Future<void> _showImageSourceOptions() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
@@ -74,56 +73,105 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
           IconButton(onPressed: _save, icon: const Icon(Icons.save)),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: 'タイトル'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'タイトルを入力してください' : null,
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // タイトル
+            TextFormField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                labelText: 'タイトル',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 12),
-              // Plant selection
-              Consumer<PlantProvider>(builder: (context, plantProv, _) {
-                return ListTile(
-                  title: const Text('関連植物'),
-                  subtitle: Text(_selectedPlantIds.isEmpty
-                      ? '選択されていません'
-                      : '${_selectedPlantIds.length} 個選択済み'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _selectPlants(context, plantProv),
-                );
-              }),
-              const SizedBox(height: 8),
-              // Image attachments
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ..._selectedImagePaths.map((p) => _buildImageThumb(p)),
-                    IconButton(
-                      onPressed: _showImageSourceOptions,
-                      icon: const Icon(Icons.add_a_photo),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'タイトルを入力してください' : null,
+            ),
+            const SizedBox(height: 16),
+
+            // 植物選択
+            Consumer<PlantProvider>(builder: (context, plantProv, _) {
+              final selectedNames = plantProv.plants
+                  .where((p) => _selectedPlantIds.contains(p.id))
+                  .map((p) => p.name)
+                  .toList();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('植物', style: Theme.of(context).textTheme.titleSmall),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: () => _selectPlants(context, plantProv),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('選択'),
+                      ),
+                    ],
+                  ),
+                  if (selectedNames.isEmpty)
+                    Text('選択されていません',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)))
+                  else
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: selectedNames
+                          .map((name) => Chip(
+                                label: Text(name),
+                                avatar: const Icon(Icons.eco, size: 14),
+                                visualDensity: VisualDensity.compact,
+                                onDeleted: () {
+                                  final id = plantProv.plants
+                                      .firstWhere((p) => p.name == name)
+                                      .id;
+                                  setState(() => _selectedPlantIds.remove(id));
+                                },
+                              ))
+                          .toList(),
                     ),
-                  ],
-                ),
+                ],
+              );
+            }),
+            const SizedBox(height: 16),
+
+            // 内容
+            TextFormField(
+              controller: _contentController,
+              decoration: const InputDecoration(
+                labelText: '内容',
+                hintText: 'ノートの内容を入力してください',
+                border: OutlineInputBorder(),
+                alignLabelWithHint: true,
               ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: TextFormField(
-                  controller: _contentController,
-                  decoration: const InputDecoration(labelText: '内容'),
-                  maxLines: null,
-                  expands: true,
+              minLines: 6,
+              maxLines: null,
+            ),
+            const SizedBox(height: 16),
+
+            // 画像
+            Row(
+              children: [
+                Text('画像', style: Theme.of(context).textTheme.titleSmall),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: _showImageSourceOptions,
+                  icon: const Icon(Icons.add_a_photo, size: 18),
+                  label: const Text('追加'),
                 ),
+              ],
+            ),
+            if (_selectedImagePaths.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _selectedImagePaths.map((p) => _buildImageThumb(p)).toList(),
               ),
-            ],
-          ),
+            const SizedBox(height: 80),
+          ],
         ),
       ),
     );
@@ -159,38 +207,45 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: const Text('関連植物を選択'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView(
-              children: allPlants.map((p) {
-                final checked = tempSelected.contains(p.id);
-                return CheckboxListTile(
-                  value: checked,
-                  title: Text(p.name),
-                  onChanged: (v) {
-                    setState(() {
-                      if (v == true) {
-                        tempSelected.add(p.id);
-                      } else {
-                        tempSelected.remove(p.id);
-                      }
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('キャンセル')),
-            TextButton(
-                onPressed: () {
-                  setState(() => _selectedPlantIds = tempSelected);
-                  Navigator.of(ctx).pop();
-                },
-                child: const Text('OK')),
-          ],
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('植物を選択'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: allPlants.map((p) {
+                    final checked = tempSelected.contains(p.id);
+                    return CheckboxListTile(
+                      value: checked,
+                      title: Text(p.name),
+                      onChanged: (v) {
+                        setDialogState(() {
+                          if (v == true) {
+                            if (!tempSelected.contains(p.id)) {
+                              tempSelected.add(p.id);
+                            }
+                          } else {
+                            tempSelected.remove(p.id);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('キャンセル')),
+                TextButton(
+                    onPressed: () {
+                      setState(() => _selectedPlantIds = List.from(tempSelected));
+                      Navigator.of(ctx).pop();
+                    },
+                    child: const Text('OK')),
+              ],
+            );
+          },
         );
       },
     );
@@ -226,7 +281,7 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
       if (x != null) setState(() => _selectedImagePaths.add(x.path));
     } else {
       final xs = await picker.pickMultiImage(imageQuality: 80);
-      if (xs != null && xs.isNotEmpty) setState(() => _selectedImagePaths.addAll(xs.map((e) => e.path)));
+      if (xs.isNotEmpty) setState(() => _selectedImagePaths.addAll(xs.map((e) => e.path)));
     }
   }
 }

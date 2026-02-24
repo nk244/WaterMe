@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'providers/plant_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/note_provider.dart';
@@ -7,7 +8,9 @@ import 'screens/home_screen.dart';
 import 'theme/app_themes.dart';
 import 'models/app_settings.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ja');
   runApp(const MyApp());
 }
 
@@ -34,7 +37,6 @@ class MyApp extends StatelessWidget {
               mode = ThemeMode.dark;
               break;
             case ThemePreference.system:
-            default:
               mode = ThemeMode.system;
               break;
           }
