@@ -17,6 +17,7 @@ class MemoryStorageService {
   final List<Plant> _plants = [];
   final List<LogEntry> _logs = [];
   final List<DiaryEntry> _diaries = [];
+  final List _notes = [];
   bool _isInitialized = false;
 
   void _initializeTestData() {
@@ -105,6 +106,25 @@ class MemoryStorageService {
 
   Future<void> deleteDiary(String id) async {
     _diaries.removeWhere((d) => d.id == id);
+  }
+
+  // Note operations
+  Future<void> insertNote(note) async {
+    _notes.removeWhere((n) => n['id'] == note.id);
+    _notes.add(note.toMap());
+  }
+
+  Future<List> getAllNotes() async {
+    return List.from(_notes)..sort((a, b) => b['updatedAt'].compareTo(a['updatedAt']));
+  }
+
+  Future<void> updateNote(note) async {
+    _notes.removeWhere((n) => n['id'] == note.id);
+    _notes.add(note.toMap());
+  }
+
+  Future<void> deleteNote(String id) async {
+    _notes.removeWhere((n) => n['id'] == id);
   }
 
   Future<void> close() async {

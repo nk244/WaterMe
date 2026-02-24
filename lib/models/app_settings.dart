@@ -10,6 +10,12 @@ enum AppTheme {
   orange,
 }
 
+enum ThemePreference {
+  system,
+  light,
+  dark,
+}
+
 enum PlantSortOrder {
   nameAsc,           // 名前昇順
   nameDesc,          // 名前降順
@@ -79,6 +85,7 @@ class LogTypeColors {
 class AppSettings {
   final ViewMode viewMode;
   final AppTheme theme;
+  final ThemePreference themePreference;
   final int notificationHour;
   final int notificationMinute;
   final LogTypeColors logTypeColors;
@@ -88,6 +95,7 @@ class AppSettings {
   AppSettings({
     this.viewMode = ViewMode.card,
     this.theme = AppTheme.green,
+    this.themePreference = ThemePreference.system,
     this.notificationHour = 9,
     this.notificationMinute = 0,
     LogTypeColors? logTypeColors,
@@ -99,6 +107,7 @@ class AppSettings {
     return {
       'viewMode': viewMode.name,
       'theme': theme.name,
+      'themePreference': themePreference.name,
       'notificationHour': notificationHour,
       'notificationMinute': notificationMinute,
       'logTypeColors': logTypeColors.toMap(),
@@ -117,6 +126,12 @@ class AppSettings {
         (e) => e.name == map['theme'],
         orElse: () => AppTheme.green,
       ),
+      themePreference: map['themePreference'] != null
+          ? ThemePreference.values.firstWhere(
+              (e) => e.name == map['themePreference'],
+              orElse: () => ThemePreference.system,
+            )
+          : ThemePreference.system,
       notificationHour: map['notificationHour'] ?? 9,
       notificationMinute: map['notificationMinute'] ?? 0,
       logTypeColors: map['logTypeColors'] != null
@@ -135,6 +150,7 @@ class AppSettings {
   AppSettings copyWith({
     ViewMode? viewMode,
     AppTheme? theme,
+    ThemePreference? themePreference,
     int? notificationHour,
     int? notificationMinute,
     LogTypeColors? logTypeColors,
@@ -144,6 +160,7 @@ class AppSettings {
     return AppSettings(
       viewMode: viewMode ?? this.viewMode,
       theme: theme ?? this.theme,
+      themePreference: themePreference ?? this.themePreference,
       notificationHour: notificationHour ?? this.notificationHour,
       notificationMinute: notificationMinute ?? this.notificationMinute,
       logTypeColors: logTypeColors ?? this.logTypeColors,

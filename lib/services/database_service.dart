@@ -31,8 +31,32 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'water_me.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: _onCreate,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE notes(
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              content TEXT,
+              imagePaths TEXT,
+              plantIds TEXT,
+              createdAt TEXT NOT NULL,
+              updatedAt TEXT NOT NULL
+            )
+          ''');
+        }
+
+        if (oldVersion < 3) {
+          // add plantIds column to notes (for older DBs)
+          try {
+            await db.execute('ALTER TABLE notes ADD COLUMN plantIds TEXT');
+          } catch (_) {
+            // ignore if column already exists
+          }
+        }
+      },
     );
   }
 
@@ -74,6 +98,19 @@ class DatabaseService {
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (plantId) REFERENCES plants (id) ON DELETE CASCADE
+      )
+    ''');
+
+    // Notes table for standalone notes/diary entries
+    await db.execute('''
+      CREATE TABLE notes(
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT,
+        imagePaths TEXT,
+        plantIds TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
       )
     ''');
   }
@@ -206,6 +243,28 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  // Notes CRUD operations
+  Future<void> insertNote(note) async {
+    final db = await database;
+    await db.insert('notes', note.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List> getAllNotes() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('notes', orderBy: 'updatedAt DESC');
+    return List.generate(maps.length, (i) => maps[i]);
+  }
+
+  Future<void> updateNote(note) async {
+    final db = await database;
+    await db.update('notes', note.toMap(), where: 'id = ?', whereArgs: [note.id]);
+  }
+
+  Future<void> deleteNote(String id) async {
+    final db = await database;
+    await db.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> close() async {

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/plant_provider.dart';
 import 'today_watering_screen.dart';
 import 'plant_list_screen.dart';
+import 'notes_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = [
     const TodayWateringScreen(),
     const PlantListScreen(),
+    const NotesListScreen(),
   ];
 
   @override
@@ -45,6 +47,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.eco_outlined),
             selectedIcon: Icon(Icons.eco),
             label: '植物一覧',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.note_outlined),
+            selectedIcon: Icon(Icons.note),
+            label: 'ノート',
           ),
         ],
       ),

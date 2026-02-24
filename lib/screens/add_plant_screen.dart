@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'image_crop_screen.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'dart:io';
@@ -52,34 +53,96 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
 
   Future<void> _pickImage() async {
     try {
+      // Deprecated: use _showImageSourceOptions to choose source
       final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
-      
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 2048, maxHeight: 2048);
+
       if (pickedFile != null) {
         if (kIsWeb) {
-          // For web, just use the path directly
-          setState(() {
-            _imagePath = pickedFile.path;
-          });
-        } else {
-          // For mobile, copy to app directory
-          final appDir = await getApplicationDocumentsDirectory();
-          final fileName = path.basename(pickedFile.path);
-          final savedImage = await File(pickedFile.path).copy('${appDir.path}/$fileName');
-          
-          setState(() {
-            _imagePath = savedImage.path;
-          });
+          setState(() => _imagePath = pickedFile.path);
+          return;
         }
+
+        // For mobile: optionally allow cropping to square
+        final cropped = await ImageCropper().cropImage(
+          sourcePath: pickedFile.path,
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: '画像をトリミング',
+              initAspectRatio: CropAspectRatioPreset.square,
+              lockAspectRatio: true,
+            ),
+            IOSUiSettings(
+              title: '画像をトリミング',
+              aspectRatioLockEnabled: true,
+            ),
+          ],
+        );
+
+        final toSavePath = cropped?.path ?? pickedFile.path;
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = path.basename(toSavePath);
+        final savedImage = await File(toSavePath).copy('${appDir.path}/$fileName');
+        setState(() => _imagePath = savedImage.path);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('画像の選択に失敗しました: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showImageSourceOptions() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('カメラで撮影'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('ギャラリーから選択'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: source, maxWidth: 2048, maxHeight: 2048);
+      if (pickedFile == null) return;
+
+      if (kIsWeb) {
+        setState(() => _imagePath = pickedFile.path);
+        return;
+      }
+
+      // Launch crop screen and get cropped path
+      final croppedPath = await Navigator.of(context).push<String?>(
+        MaterialPageRoute(builder: (_) => ImageCropScreen(imagePath: pickedFile.path)),
+      );
+
+      final toSavePath = croppedPath ?? pickedFile.path;
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = path.basename(toSavePath);
+      final savedImage = await File(toSavePath).copy('${appDir.path}/$fileName');
+      setState(() => _imagePath = savedImage.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('画像の取得に失敗しました: $e')),
         );
       }
     }
@@ -180,7 +243,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
             // Image picker
             Center(
               child: GestureDetector(
-                onTap: _pickImage,
+                onTap: _showImageSourceOptions,
                 child: Container(
                   width: 150,
                   height: 150,

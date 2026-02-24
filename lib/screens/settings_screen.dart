@@ -21,22 +21,45 @@ class SettingsScreen extends StatelessWidget {
           Consumer<SettingsProvider>(
             builder: (context, settings, _) {
               return Column(
-                children: AppTheme.values.map((theme) {
-                  return RadioListTile<AppTheme>(
-                    title: Text(_getThemeName(theme)),
-                    value: theme,
-                    groupValue: settings.theme,
-                    onChanged: (value) {
-                      if (value != null) {
-                        settings.setTheme(value);
-                      }
-                    },
-                    secondary: Icon(
-                      Icons.palette,
-                      color: _getThemeColor(theme),
-                    ),
-                  );
-                }).toList(),
+                children: [
+                  // Theme mode (system/light/dark)
+                  RadioListTile<ThemePreference>(
+                    title: const Text('システムに従う'),
+                    value: ThemePreference.system,
+                    groupValue: settings.themePreference,
+                    onChanged: (v) => settings.setThemePreference(v!),
+                  ),
+                  RadioListTile<ThemePreference>(
+                    title: const Text('ライトモード'),
+                    value: ThemePreference.light,
+                    groupValue: settings.themePreference,
+                    onChanged: (v) => settings.setThemePreference(v!),
+                  ),
+                  RadioListTile<ThemePreference>(
+                    title: const Text('ダークモード'),
+                    value: ThemePreference.dark,
+                    groupValue: settings.themePreference,
+                    onChanged: (v) => settings.setThemePreference(v!),
+                  ),
+                  const Divider(),
+                  // Color theme selection
+                  ...AppTheme.values.map((theme) {
+                    return RadioListTile<AppTheme>(
+                      title: Text(_getThemeName(theme)),
+                      value: theme,
+                      groupValue: settings.theme,
+                      onChanged: (value) {
+                        if (value != null) {
+                          settings.setTheme(value);
+                        }
+                      },
+                      secondary: Icon(
+                        Icons.palette,
+                        color: _getThemeColor(theme),
+                      ),
+                    );
+                  }).toList(),
+                ],
               );
             },
           ),

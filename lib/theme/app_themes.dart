@@ -2,64 +2,42 @@ import 'package:flutter/material.dart';
 import '../models/app_settings.dart';
 
 class AppThemes {
-  static ThemeData getTheme(AppTheme theme) {
+  static ThemeData getLightTheme(AppTheme theme) {
     switch (theme) {
       case AppTheme.green:
-        return _greenTheme;
+        return _lightThemeForSeed(Colors.green);
       case AppTheme.blue:
-        return _blueTheme;
+        return _lightThemeForSeed(Colors.blue);
       case AppTheme.purple:
-        return _purpleTheme;
+        return _lightThemeForSeed(Colors.purple);
       case AppTheme.orange:
-        return _orangeTheme;
+        return _lightThemeForSeed(Colors.orange);
     }
   }
 
-  static final ThemeData _greenTheme = ThemeData(
-    useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.green,
-      brightness: Brightness.light,
-    ),
-    appBarTheme: const AppBarTheme(
-      centerTitle: true,
-      elevation: 0,
-    ),
-  );
+  static ThemeData getDarkTheme(AppTheme theme) {
+    switch (theme) {
+      case AppTheme.green:
+        return _darkThemeForSeed(Colors.green);
+      case AppTheme.blue:
+        return _darkThemeForSeed(Colors.blue);
+      case AppTheme.purple:
+        return _darkThemeForSeed(Colors.purple);
+      case AppTheme.orange:
+        return _darkThemeForSeed(Colors.orange);
+    }
+  }
 
-  static final ThemeData _blueTheme = ThemeData(
-    useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.blue,
-      brightness: Brightness.light,
-    ),
-    appBarTheme: const AppBarTheme(
-      centerTitle: true,
-      elevation: 0,
-    ),
-  );
+  static ThemeData _lightThemeForSeed(Color seed) => ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light),
+        appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
+      );
 
-  static final ThemeData _purpleTheme = ThemeData(
-    useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.purple,
-      brightness: Brightness.light,
-    ),
-    appBarTheme: const AppBarTheme(
-      centerTitle: true,
-      elevation: 0,
-    ),
-  );
-
-  static final ThemeData _orangeTheme = ThemeData(
-    useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.orange,
-      brightness: Brightness.light,
-    ),
-    appBarTheme: const AppBarTheme(
-      centerTitle: true,
-      elevation: 0,
-    ),
-  );
+  static ThemeData _darkThemeForSeed(Color seed) => ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
+        brightness: Brightness.dark,
+        appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
+      );
 }

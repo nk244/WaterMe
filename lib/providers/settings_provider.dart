@@ -9,6 +9,7 @@ class SettingsProvider with ChangeNotifier {
   AppSettings get settings => _settings;
   ViewMode get viewMode => _settings.viewMode;
   AppTheme get theme => _settings.theme;
+  ThemePreference get themePreference => _settings.themePreference;
   LogTypeColors get logTypeColors => _settings.logTypeColors;
   PlantSortOrder get plantSortOrder => _settings.plantSortOrder;
   List<String> get customSortOrder => _settings.customSortOrder;
@@ -26,6 +27,12 @@ class SettingsProvider with ChangeNotifier {
 
   Future<void> setTheme(AppTheme theme) async {
     _settings = _settings.copyWith(theme: theme);
+    await _settingsService.saveSettings(_settings);
+    notifyListeners();
+  }
+
+  Future<void> setThemePreference(ThemePreference pref) async {
+    _settings = _settings.copyWith(themePreference: pref);
     await _settingsService.saveSettings(_settings);
     notifyListeners();
   }
