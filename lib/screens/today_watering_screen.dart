@@ -291,7 +291,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('水やり管理'),
+        title: const Text('水やりログ'),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),

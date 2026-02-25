@@ -41,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(
             icon: Icon(Icons.water_drop_outlined),
             selectedIcon: Icon(Icons.water_drop),
-            label: '今日の水やり',
+            label: '水やりログ',
           ),
           NavigationDestination(
             icon: Icon(Icons.eco_outlined),
