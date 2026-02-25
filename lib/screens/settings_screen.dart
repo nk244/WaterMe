@@ -69,33 +69,39 @@ class SettingsScreen extends StatelessWidget {
           _buildSectionHeader(context, '通知設定'),
           Consumer<SettingsProvider>(
             builder: (context, settings, _) {
-              return ListTile(
-                leading: const Icon(Icons.notifications),
-                title: const Text('通知時刻'),
-                subtitle: Text(
-                  '${settings.settings.notificationHour.toString().padLeft(2, '0')}:${settings.settings.notificationMinute.toString().padLeft(2, '0')}',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  final time = await showTimePicker(
-                    context: context,
-                    initialTime: TimeOfDay(
-                      hour: settings.settings.notificationHour,
-                      minute: settings.settings.notificationMinute,
+              return Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.notifications),
+                    title: const Text('水やりリマインダー'),
+                    subtitle: const Text('毎日指定した時刻に通知します'),
+                    value: settings.notificationEnabled,
+                    onChanged: (v) => settings.setNotificationEnabled(v),
+                  ),
+                  if (settings.notificationEnabled)
+                    ListTile(
+                      leading: const Icon(Icons.access_time),
+                      title: const Text('通知時刻'),
+                      subtitle: Text(
+                        '${settings.settings.notificationHour.toString().padLeft(2, '0')}:${settings.settings.notificationMinute.toString().padLeft(2, '0')}',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay(
+                            hour: settings.settings.notificationHour,
+                            minute: settings.settings.notificationMinute,
+                          ),
+                        );
+                        if (time != null) {
+                          settings.setNotificationTime(time.hour, time.minute);
+                        }
+                      },
                     ),
-                  );
-                  if (time != null) {
-                    settings.setNotificationTime(time.hour, time.minute);
-                  }
-                },
+                ],
               );
             },
-          ),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('通知について'),
-            subtitle: const Text('水やりが必要な植物を毎日お知らせします'),
-            enabled: false,
           ),
           const Divider(),
 

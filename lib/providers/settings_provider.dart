@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/app_settings.dart';
 import '../services/settings_service.dart';
+import '../services/notification_service.dart';
 
 class SettingsProvider with ChangeNotifier {
   final SettingsService _settingsService = SettingsService();
@@ -10,6 +11,7 @@ class SettingsProvider with ChangeNotifier {
   ViewMode get viewMode => _settings.viewMode;
   AppTheme get theme => _settings.theme;
   ThemePreference get themePreference => _settings.themePreference;
+  bool get notificationEnabled => _settings.notificationEnabled;
   LogTypeColors get logTypeColors => _settings.logTypeColors;
   PlantSortOrder get plantSortOrder => _settings.plantSortOrder;
   List<String> get customSortOrder => _settings.customSortOrder;
@@ -44,6 +46,38 @@ class SettingsProvider with ChangeNotifier {
     );
     await _settingsService.saveSettings(_settings);
     notifyListeners();
+    // 通知が有効なら再スケジュール
+    if (_settings.notificationEnabled && !kIsWeb) {
+      await NotificationService().scheduleDailyWateringReminder(
+        hour: hour,
+        minute: minute,
+      );
+    }
+  }
+
+  Future<void> setNotificationEnabled(bool enabled) async {
+    _settings = _settings.copyWith(notificationEnabled: enabled);
+    await _settingsService.saveSettings(_settings);
+    notifyListeners();
+    if (!kIsWeb) {
+      if (enabled) {
+        // パーミッション確認してからスケジュール
+        final granted = await NotificationService().requestPermission();
+        if (granted) {
+          await NotificationService().scheduleDailyWateringReminder(
+            hour: _settings.notificationHour,
+            minute: _settings.notificationMinute,
+          );
+        } else {
+          // パーミッション拒否されたら設定を戻す
+          _settings = _settings.copyWith(notificationEnabled: false);
+          await _settingsService.saveSettings(_settings);
+          notifyListeners();
+        }
+      } else {
+        await NotificationService().cancelDailyWateringReminder();
+      }
+    }
   }
 
   Future<void> setLogTypeColors(LogTypeColors colors) async {

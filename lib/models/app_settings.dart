@@ -86,6 +86,7 @@ class AppSettings {
   final ViewMode viewMode;
   final AppTheme theme;
   final ThemePreference themePreference;
+  final bool notificationEnabled;
   final int notificationHour;
   final int notificationMinute;
   final LogTypeColors logTypeColors;
@@ -96,6 +97,7 @@ class AppSettings {
     this.viewMode = ViewMode.card,
     this.theme = AppTheme.green,
     this.themePreference = ThemePreference.system,
+    this.notificationEnabled = true,
     this.notificationHour = 9,
     this.notificationMinute = 0,
     LogTypeColors? logTypeColors,
@@ -108,6 +110,7 @@ class AppSettings {
       'viewMode': viewMode.name,
       'theme': theme.name,
       'themePreference': themePreference.name,
+      'notificationEnabled': notificationEnabled,
       'notificationHour': notificationHour,
       'notificationMinute': notificationMinute,
       'logTypeColors': logTypeColors.toMap(),
@@ -132,6 +135,7 @@ class AppSettings {
               orElse: () => ThemePreference.system,
             )
           : ThemePreference.system,
+      notificationEnabled: map['notificationEnabled'] ?? true,
       notificationHour: map['notificationHour'] ?? 9,
       notificationMinute: map['notificationMinute'] ?? 0,
       logTypeColors: map['logTypeColors'] != null
@@ -151,6 +155,7 @@ class AppSettings {
     ViewMode? viewMode,
     AppTheme? theme,
     ThemePreference? themePreference,
+    bool? notificationEnabled,
     int? notificationHour,
     int? notificationMinute,
     LogTypeColors? logTypeColors,
@@ -161,6 +166,7 @@ class AppSettings {
       viewMode: viewMode ?? this.viewMode,
       theme: theme ?? this.theme,
       themePreference: themePreference ?? this.themePreference,
+      notificationEnabled: notificationEnabled ?? this.notificationEnabled,
       notificationHour: notificationHour ?? this.notificationHour,
       notificationMinute: notificationMinute ?? this.notificationMinute,
       logTypeColors: logTypeColors ?? this.logTypeColors,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'providers/plant_provider.dart';
@@ -7,10 +8,17 @@ import 'providers/note_provider.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_themes.dart';
 import 'models/app_settings.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ja');
+
+  // 通知サービスを初期化
+  if (!kIsWeb) {
+    await NotificationService().initialize();
+  }
+
   runApp(const MyApp());
 }
 
