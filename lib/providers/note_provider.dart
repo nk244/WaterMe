@@ -22,8 +22,7 @@ class NoteProvider with ChangeNotifier {
         final maps = await _memory!.getAllNotes();
         _notes = maps.map((m) => Note.fromMap(m)).toList();
       } else {
-        final maps = await _db!.getAllNotes();
-        _notes = maps.map((m) => Note.fromMap(m)).toList();
+        _notes = await _db!.getAllNotes();
       }
     } catch (e) {
       debugPrint('Error loading notes: $e');
