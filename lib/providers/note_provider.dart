@@ -2,11 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/note.dart';
 import '../services/database_service.dart';
-import '../services/memory_storage_service.dart';
+import '../services/web_storage_service.dart';
 
 class NoteProvider with ChangeNotifier {
-  final _db = kIsWeb ? null : DatabaseService();
-  final _memory = kIsWeb ? MemoryStorageService() : null;
+  final DatabaseService? _db = kIsWeb ? null : DatabaseService();
+  final WebStorageService? _web = kIsWeb ? WebStorageService() : null;
   List<Note> _notes = [];
   bool _isLoading = false;
 
@@ -19,8 +19,8 @@ class NoteProvider with ChangeNotifier {
 
     try {
       if (kIsWeb) {
-        final maps = await _memory!.getAllNotes();
-        _notes = maps.map((m) => Note.fromMap(m)).toList();
+        final maps = await _web!.getAllNotes();
+        _notes = maps.map((m) => Note.fromMap(Map<String, dynamic>.from(m))).toList();
       } else {
         final maps = await _db!.getAllNotes();
         _notes = maps.map((m) => Note.fromMap(m)).toList();
@@ -46,7 +46,7 @@ class NoteProvider with ChangeNotifier {
     );
 
     if (kIsWeb) {
-      await _memory!.insertNote(note);
+      await _web!.insertNote(note);
     } else {
       await _db!.insertNote(note);
     }
@@ -56,7 +56,7 @@ class NoteProvider with ChangeNotifier {
 
   Future<void> updateNote(Note note) async {
     if (kIsWeb) {
-      await _memory!.updateNote(note);
+      await _web!.updateNote(note);
     } else {
       await _db!.updateNote(note);
     }
@@ -65,7 +65,7 @@ class NoteProvider with ChangeNotifier {
 
   Future<void> deleteNote(String id) async {
     if (kIsWeb) {
-      await _memory!.deleteNote(id);
+      await _web!.deleteNote(id);
     } else {
       await _db!.deleteNote(id);
     }
