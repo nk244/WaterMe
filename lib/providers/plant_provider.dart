@@ -142,9 +142,8 @@ class PlantProvider with ChangeNotifier {
         // Web: WebStorageServiceの専用メソッドで一括処理
         await _web!.removePlantIdFromNotes(plantId);
       } else {
-        final noteMaps = await _db!.getAllNotes();
-        for (final map in noteMaps) {
-          final note = Note.fromMap(map);
+        final notes = await _db!.getAllNotes();
+        for (final note in notes) {
           if (note.plantIds.contains(plantId)) {
             final updatedNote = note.copyWith(
               plantIds: note.plantIds.where((id) => id != plantId).toList(),

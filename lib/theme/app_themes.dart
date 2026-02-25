@@ -31,6 +31,7 @@ class AppThemes {
   static ThemeData _lightThemeForSeed(Color seed) => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light),
+        fontFamily: 'NotoSansJP',
         appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
       );
 
@@ -38,6 +39,7 @@ class AppThemes {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
         brightness: Brightness.dark,
+        fontFamily: 'NotoSansJP',
         appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
       );
 }

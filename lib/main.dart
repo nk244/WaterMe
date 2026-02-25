@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'providers/plant_provider.dart';
@@ -51,6 +52,13 @@ class MyApp extends StatelessWidget {
 
           return MaterialApp(
             title: 'WaterMe',
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('ja')],
+            locale: const Locale('ja'),
             theme: AppThemes.getLightTheme(settingsProvider.theme),
             darkTheme: AppThemes.getDarkTheme(settingsProvider.theme),
             themeMode: mode,
