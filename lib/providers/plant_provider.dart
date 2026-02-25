@@ -5,11 +5,11 @@ import '../models/log_entry.dart';
 import '../models/note.dart';
 import '../models/app_settings.dart';
 import '../services/database_service.dart';
-import '../services/memory_storage_service.dart';
+import '../services/web_storage_service.dart';
 
 class PlantProvider with ChangeNotifier {
-  final _db = kIsWeb ? null : DatabaseService();
-  final _memory = kIsWeb ? MemoryStorageService() : null;
+  final DatabaseService? _db = kIsWeb ? null : DatabaseService();
+  final WebStorageService? _web = kIsWeb ? WebStorageService() : null;
   List<Plant> _plants = [];
   bool _isLoading = false;
   Map<String, DateTime?> _nextWateringCache = {};
@@ -23,7 +23,7 @@ class PlantProvider with ChangeNotifier {
 
     try {
       if (kIsWeb) {
-        _plants = await _memory!.getAllPlants();
+        _plants = await _web!.getAllPlants();
       } else {
         _plants = await _db!.getAllPlants();
       }
@@ -106,7 +106,7 @@ class PlantProvider with ChangeNotifier {
     );
 
     if (kIsWeb) {
-      await _memory!.insertPlant(plant);
+      await _web!.insertPlant(plant);
     } else {
       await _db!.insertPlant(plant);
     }
@@ -115,7 +115,7 @@ class PlantProvider with ChangeNotifier {
 
   Future<void> updatePlant(Plant plant) async {
     if (kIsWeb) {
-      await _memory!.updatePlant(plant);
+      await _web!.updatePlant(plant);
     } else {
       await _db!.updatePlant(plant);
     }
@@ -124,7 +124,7 @@ class PlantProvider with ChangeNotifier {
 
   Future<void> deletePlant(String id) async {
     if (kIsWeb) {
-      await _memory!.deletePlant(id);
+      await _web!.deletePlant(id);
     } else {
       await _db!.deletePlant(id);
     }
@@ -138,21 +138,19 @@ class PlantProvider with ChangeNotifier {
   /// 削除された植物IDを、参照しているすべてのノートの plantIds から除去する
   Future<void> _removePlantIdFromNotes(String plantId) async {
     try {
-      final noteMaps = kIsWeb
-          ? await _memory!.getAllNotes()
-          : await _db!.getAllNotes();
-
-      for (final map in noteMaps) {
-        final note = Note.fromMap(map);
-        if (note.plantIds.contains(plantId)) {
-          final updatedNote = note.copyWith(
-            plantIds: note.plantIds.where((id) => id != plantId).toList(),
-            updatedAt: DateTime.now(),
-          );
-          if (kIsWeb) {
-            await _memory!.updateNote(updatedNote);
-          } else {
-            await _db!.updateNote(updatedNote);
+      if (kIsWeb) {
+        // Web: WebStorageServiceの専用メソッドで一括処理
+        await _web!.removePlantIdFromNotes(plantId);
+      } else {
+        final noteMaps = await _db!.getAllNotes();
+        for (final map in noteMaps) {
+          final note = Note.fromMap(map);
+          if (note.plantIds.contains(plantId)) {
+            final updatedNote = note.copyWith(
+              plantIds: note.plantIds.where((id) => id != plantId).toList(),
+              updatedAt: DateTime.now(),
+            );
+            await _db.updateNote(updatedNote);
           }
         }
       }
@@ -174,7 +172,7 @@ class PlantProvider with ChangeNotifier {
     );
     
     if (kIsWeb) {
-      await _memory!.insertLog(log);
+      await _web!.insertLog(log);
     } else {
       await _db!.insertLog(log);
     }
@@ -196,7 +194,7 @@ class PlantProvider with ChangeNotifier {
     );
     
     if (kIsWeb) {
-      await _memory!.insertLog(log);
+      await _web!.insertLog(log);
     } else {
       await _db!.insertLog(log);
     }
@@ -216,7 +214,7 @@ class PlantProvider with ChangeNotifier {
     );
     
     if (kIsWeb) {
-      await _memory!.insertLog(log);
+      await _web!.insertLog(log);
     } else {
       await _db!.insertLog(log);
     }
@@ -228,7 +226,7 @@ class PlantProvider with ChangeNotifier {
   Future<DateTime?> calculateNextWateringDate(String plantId) async {
     Plant? plant;
     if (kIsWeb) {
-      plant = await _memory!.getPlant(plantId);
+      plant = await _web!.getPlant(plantId);
     } else {
       plant = await _db!.getPlant(plantId);
     }
@@ -238,7 +236,7 @@ class PlantProvider with ChangeNotifier {
     // 最新の水やり記録を取得
     List<LogEntry> wateringLogs;
     if (kIsWeb) {
-      wateringLogs = await _memory!.getLogsByPlantAndType(plantId, LogType.watering);
+      wateringLogs = await _web!.getLogsByPlantAndType(plantId, LogType.watering);
     } else {
       wateringLogs = await _db!.getLogsByPlantAndType(plantId, LogType.watering);
     }
@@ -266,7 +264,7 @@ class PlantProvider with ChangeNotifier {
 
     List<LogEntry> logs;
     if (kIsWeb) {
-      logs = await _memory!.getLogsByPlantAndType(plantId, logType);
+      logs = await _web!.getLogsByPlantAndType(plantId, logType);
     } else {
       logs = await _db!.getLogsByPlantAndType(plantId, logType);
     }
@@ -296,7 +294,7 @@ class PlantProvider with ChangeNotifier {
     final logs = await getLogsForDate(plantId, logType, date);
     for (final log in logs) {
       if (kIsWeb) {
-        await _memory!.deleteLog(log.id);
+        await _web!.deleteLog(log.id);
       } else {
         await _db!.deleteLog(log.id);
       }
@@ -320,7 +318,7 @@ class PlantProvider with ChangeNotifier {
     LogType logType,
   ) async {
     if (kIsWeb) {
-      return await _memory!.getLogsByPlantAndType(plantId, logType);
+      return await _web!.getLogsByPlantAndType(plantId, logType);
     } else {
       return await _db!.getLogsByPlantAndType(plantId, logType);
     }
@@ -329,7 +327,7 @@ class PlantProvider with ChangeNotifier {
   /// Deletes a specific log by ID
   Future<void> deleteLog(String logId) async {
     if (kIsWeb) {
-      await _memory!.deleteLog(logId);
+      await _web!.deleteLog(logId);
     } else {
       await _db!.deleteLog(logId);
     }

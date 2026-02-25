@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/plant.dart';
 import '../models/log_entry.dart';
+import '../models/note.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class DatabaseService {
@@ -195,18 +196,18 @@ class DatabaseService {
   }
 
   // Notes CRUD operations
-  Future<void> insertNote(note) async {
+  Future<void> insertNote(Note note) async {
     final db = await database;
     await db.insert('notes', note.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List> getAllNotes() async {
+  Future<List<Note>> getAllNotes() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('notes', orderBy: 'updatedAt DESC');
-    return List.generate(maps.length, (i) => maps[i]);
+    return List.generate(maps.length, (i) => Note.fromMap(maps[i]));
   }
 
-  Future<void> updateNote(note) async {
+  Future<void> updateNote(Note note) async {
     final db = await database;
     await db.update('notes', note.toMap(), where: 'id = ?', whereArgs: [note.id]);
   }

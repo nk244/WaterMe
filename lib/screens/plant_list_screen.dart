@@ -17,6 +17,9 @@ class PlantListScreen extends StatefulWidget {
 }
 
 class _PlantListScreenState extends State<PlantListScreen> {
+  /// true = グリッド表示、false = リスト表示
+  bool _isGridView = false;
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +34,16 @@ class _PlantListScreenState extends State<PlantListScreen> {
       appBar: AppBar(
         title: const Text('WaterMe'),
         actions: [
+          // グリッド/リスト表示切り替えボタン
+          IconButton(
+            icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
+            tooltip: _isGridView ? 'リスト表示' : 'グリッド表示',
+            onPressed: () {
+              setState(() {
+                _isGridView = !_isGridView;
+              });
+            },
+          ),
           // Sort order menu
           Consumer<SettingsProvider>(
             builder: (context, settingsForMenu, _) {
@@ -133,9 +146,13 @@ class _PlantListScreenState extends State<PlantListScreen> {
                 settings.customSortOrder,
               );
               
-              // カード表示機能を無効化、リスト表示のみ
               final isCustomSort = settings.plantSortOrder == PlantSortOrder.custom;
               
+              // グリッド表示（カスタムソート時はリスト優先）
+              if (_isGridView && !isCustomSort) {
+                return _buildGridView(sortedPlants);
+              }
+
               return isCustomSort 
                   ? _buildReorderableListView(context, sortedPlants, settings)
                   : _buildListView(sortedPlants);
@@ -162,6 +179,23 @@ class _PlantListScreenState extends State<PlantListScreen> {
       itemCount: plants.length,
       itemBuilder: (context, index) {
         return _PlantListTile(plant: plants[index]);
+      },
+    );
+  }
+
+  /// グリッド（カード）表示ビューを構築する
+  Widget _buildGridView(List<Plant> plants) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.78,
+      ),
+      itemCount: plants.length,
+      itemBuilder: (context, index) {
+        return _PlantGridCard(plant: plants[index]);
       },
     );
   }
@@ -292,6 +326,77 @@ class _PlantListTile extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => PlantDetailScreen(plant: plant),
+      ),
+    );
+  }
+}
+
+/// グリッド表示用カードウィジェット
+class _PlantGridCard extends StatelessWidget {
+  final Plant plant;
+
+  const _PlantGridCard({required this.plant});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PlantDetailScreen(plant: plant),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 植物画像（カード上部 3/5 を占める）
+            Expanded(
+              flex: 3,
+              child: PlantImageWidget(
+                plant: plant,
+                width: double.infinity,
+                height: double.infinity,
+                borderRadius: BorderRadius.zero,
+              ),
+            ),
+            // 植物名・品種（カード下部 2/5）
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      plant.name,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (plant.variety != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        plant.variety!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.6),
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
