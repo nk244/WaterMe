@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/plant.dart';
 import '../models/log_entry.dart';
+import '../models/note.dart';
 import '../models/app_settings.dart';
 import '../services/database_service.dart';
 import '../services/memory_storage_service.dart';
@@ -127,7 +128,37 @@ class PlantProvider with ChangeNotifier {
     } else {
       await _db!.deletePlant(id);
     }
+
+    // Issue #12: 削除した植物IDをノートの plantIds から除去する
+    await _removePlantIdFromNotes(id);
+
     await loadPlants();
+  }
+
+  /// 削除された植物IDを、参照しているすべてのノートの plantIds から除去する
+  Future<void> _removePlantIdFromNotes(String plantId) async {
+    try {
+      final noteMaps = kIsWeb
+          ? await _memory!.getAllNotes()
+          : await _db!.getAllNotes();
+
+      for (final map in noteMaps) {
+        final note = Note.fromMap(map);
+        if (note.plantIds.contains(plantId)) {
+          final updatedNote = note.copyWith(
+            plantIds: note.plantIds.where((id) => id != plantId).toList(),
+            updatedAt: DateTime.now(),
+          );
+          if (kIsWeb) {
+            await _memory!.updateNote(updatedNote);
+          } else {
+            await _db!.updateNote(updatedNote);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error removing plantId from notes: $e');
+    }
   }
 
   Future<void> recordWatering(String plantId, DateTime date, String? note) async {
