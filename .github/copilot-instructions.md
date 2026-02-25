@@ -140,11 +140,12 @@ AppSettings                       # 設定 (テーマ・通知時刻・通知ON/
 | # | タイトル | ブランチ | 状態 |
 |---|---|---|---|
 | #4 | プッシュ通知の実装 | `feature/push-notifications` | PR #20 (レビュー中) |
-| #5 | データエクスポート/インポート | 未着手 | - |
-| #6 | Web永続化 (SharedPreferences) | 未着手 | - |
-| #8 | DiaryEntry整理 | 未着手 | - |
-| #13 | アプリアイコン | 未着手 (アセット待ち) | - |
-| #14 | 植物画像の背景化 | 未着手 | - |
+| #5 | データエクスポート/インポート | `feature/export-import` | PR #29 (レビュー中) |
+| #6 | Web永続化 (SharedPreferences) | `feature/web-storage` | PR #24 (レビュー中) |
+| #8 | DiaryEntry整理 | `fix/remove-diary-entry` | PR #28 (レビュー中) |
+| #9 | カード（グリッド）表示モード | `feature/card-view` | PR #27 (レビュー中) |
+| #13 | アプリアイコン | `feature/app-icon` | PR #21 (レビュー中) |
+| #14 | 植物画像の背景化 | `feature/plant-image-bg` | PR #25 (レビュー中) |
 
 ---
 
