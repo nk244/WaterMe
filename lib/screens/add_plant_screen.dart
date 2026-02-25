@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'image_crop_screen.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
-import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/plant_provider.dart';
 import '../models/plant.dart';
@@ -90,11 +87,12 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         MaterialPageRoute(builder: (_) => ImageCropScreen(imagePath: pickedFile.path)),
       );
 
-      final toSavePath = croppedPath ?? pickedFile.path;
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = path.basename(toSavePath);
-      final savedImage = await File(toSavePath).copy('${appDir.path}/$fileName');
-      setState(() => _imagePath = savedImage.path);
+      // Issue #16: ユーザーがトリミング画面で「戻る」を押した場合はキャンセル扱い
+      if (croppedPath == null) return;
+
+      // Issue #15: ImageCropScreen が既にアプリディレクトリに保存済みのパスを返すため
+      // そのまま使用する（二重コピー不要）
+      setState(() => _imagePath = croppedPath);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
