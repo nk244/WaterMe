@@ -220,6 +220,7 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
                     return CheckboxListTile(
                       value: checked,
                       title: Text(p.name),
+                      subtitle: p.variety != null ? Text(p.variety!) : null,
                       onChanged: (v) {
                         setDialogState(() {
                           if (v == true) {
