@@ -1,6 +1,5 @@
 import '../models/plant.dart';
 import '../models/log_entry.dart';
-import '../models/diary_entry.dart';
 import '../data/test_data_generator.dart';
 
 class MemoryStorageService {
@@ -16,7 +15,6 @@ class MemoryStorageService {
 
   final List<Plant> _plants = [];
   final List<LogEntry> _logs = [];
-  final List<DiaryEntry> _diaries = [];
   final List _notes = [];
   bool _isInitialized = false;
 
@@ -58,7 +56,6 @@ class MemoryStorageService {
   Future<void> deletePlant(String id) async {
     _plants.removeWhere((p) => p.id == id);
     _logs.removeWhere((l) => l.plantId == id);
-    _diaries.removeWhere((d) => d.plantId == id);
   }
 
   // Log operations
@@ -86,26 +83,6 @@ class MemoryStorageService {
 
   Future<void> deleteLog(String id) async {
     _logs.removeWhere((l) => l.id == id);
-  }
-
-  // Diary operations
-  Future<void> insertDiary(DiaryEntry diary) async {
-    _diaries.removeWhere((d) => d.id == diary.id);
-    _diaries.add(diary);
-  }
-
-  Future<List<DiaryEntry>> getDiariesByPlant(String plantId) async {
-    return _diaries.where((d) => d.plantId == plantId).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-  }
-
-  Future<void> updateDiary(DiaryEntry diary) async {
-    _diaries.removeWhere((d) => d.id == diary.id);
-    _diaries.add(diary);
-  }
-
-  Future<void> deleteDiary(String id) async {
-    _diaries.removeWhere((d) => d.id == id);
   }
 
   // Note operations

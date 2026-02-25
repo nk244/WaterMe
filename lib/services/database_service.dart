@@ -2,7 +2,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/plant.dart';
 import '../models/log_entry.dart';
-import '../models/diary_entry.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class DatabaseService {
@@ -82,19 +81,6 @@ class DatabaseService {
         type TEXT NOT NULL,
         date TEXT NOT NULL,
         note TEXT,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL,
-        FOREIGN KEY (plantId) REFERENCES plants (id) ON DELETE CASCADE
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE diary_entries(
-        id TEXT PRIMARY KEY,
-        plantId TEXT NOT NULL,
-        date TEXT NOT NULL,
-        text TEXT,
-        imagePaths TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (plantId) REFERENCES plants (id) ON DELETE CASCADE
@@ -203,43 +189,6 @@ class DatabaseService {
     final db = await database;
     await db.delete(
       'logs',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  // Diary CRUD operations
-  Future<void> insertDiary(DiaryEntry diary) async {
-    final db = await database;
-    await db.insert('diary_entries', diary.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<List<DiaryEntry>> getDiariesByPlant(String plantId) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'diary_entries',
-      where: 'plantId = ?',
-      whereArgs: [plantId],
-      orderBy: 'date DESC',
-    );
-    return List.generate(maps.length, (i) => DiaryEntry.fromMap(maps[i]));
-  }
-
-  Future<void> updateDiary(DiaryEntry diary) async {
-    final db = await database;
-    await db.update(
-      'diary_entries',
-      diary.toMap(),
-      where: 'id = ?',
-      whereArgs: [diary.id],
-    );
-  }
-
-  Future<void> deleteDiary(String id) async {
-    final db = await database;
-    await db.delete(
-      'diary_entries',
       where: 'id = ?',
       whereArgs: [id],
     );
