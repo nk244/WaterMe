@@ -9,6 +9,32 @@ import '../utils/date_utils.dart';
 import 'add_plant_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+/// SliverPersistentHeaderDelegate: TabBarを固定表示するためのデリゲート
+class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+
+  const _StickyTabBarDelegate(this.tabBar);
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surface,
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyTabBarDelegate oldDelegate) =>
+      tabBar != oldDelegate.tabBar;
+}
+
 class PlantDetailScreen extends StatefulWidget {
   final Plant plant;
 
@@ -168,39 +194,149 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
     final needsWatering = _nextWateringDate != null &&
         !_nextWateringDate!.isAfter(AppDateUtils.getDateOnly(DateTime.now()));
 
+    // TabBar ウィジェット（SliverPersistentHeader に渡す）
+    final tabBar = TabBar(
+      controller: _tabController,
+      tabs: const [
+        Tab(text: '情報'),
+        Tab(text: '水やり'),
+        Tab(text: '肥料'),
+        Tab(text: '活力剤'),
+      ],
+    );
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.plant.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: _navigateToEdit,
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          // 植物画像を背景に持つ SliverAppBar
+          SliverAppBar(
+            expandedHeight: widget.plant.imagePath != null ? 260.0 : 160.0,
+            pinned: true,
+            floating: false,
+            forceElevated: innerBoxIsScrolled,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: _navigateToEdit,
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: _deletePlant,
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text(
+                widget.plant.name,
+                style: const TextStyle(
+                  shadows: [
+                    Shadow(
+                      offset: Offset(0, 1),
+                      blurRadius: 4,
+                      color: Colors.black54,
+                    ),
+                  ],
+                ),
+              ),
+              background: _buildHeaderBackground(context),
+              collapseMode: CollapseMode.parallax,
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: _deletePlant,
+          // TabBar をスクロール後も固定表示する SliverPersistentHeader
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _StickyTabBarDelegate(tabBar),
           ),
         ],
-        bottom: TabBar(
+        // TabBarView を NestedScrollView の body に配置
+        body: TabBarView(
           controller: _tabController,
-          tabs: const [
-            Tab(text: '情報'),
-            Tab(text: '水やり'),
-            Tab(text: '肥料'),
-            Tab(text: '活力剤'),
+          children: [
+            _buildInfoTab(),
+            _buildLogTab(_wateringLogs, LogType.watering),
+            _buildLogTab(_fertilizerLogs, LogType.fertilizer),
+            _buildLogTab(_vitalizerLogs, LogType.vitalizer),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildInfoTab(),
-          _buildLogTab(_wateringLogs, LogType.watering),
-          _buildLogTab(_fertilizerLogs, LogType.fertilizer),
-          _buildLogTab(_vitalizerLogs, LogType.vitalizer),
-        ],
-      ),
       floatingActionButton: _buildFloatingActionButton(needsWatering),
+    );
+  }
+
+  /// SliverAppBar の背景ウィジェットを構築する
+  Widget _buildHeaderBackground(BuildContext context) {
+    if (widget.plant.imagePath != null) {
+      // 画像あり: 植物画像を全画面背景として表示
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          _buildFullImage(),
+          // 下部にグラデーション（タイトル文字の視認性向上）
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Colors.black45],
+                stops: [0.5, 1.0],
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      // 画像なし: テーマカラーのグラデーションを表示
+      final colorScheme = Theme.of(context).colorScheme;
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colorScheme.primaryContainer,
+              colorScheme.secondaryContainer,
+            ],
+          ),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.eco,
+            size: 72,
+            color: colorScheme.onPrimaryContainer.withOpacity(0.5),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// 植物画像をWebとモバイルで出し分けて表示する
+  Widget _buildFullImage() {
+    if (kIsWeb) {
+      return Image.network(
+        widget.plant.imagePath!,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            _buildBrokenImageIcon(context),
+      );
+    } else {
+      if (File(widget.plant.imagePath!).existsSync()) {
+        return Image.file(
+          File(widget.plant.imagePath!),
+          fit: BoxFit.cover,
+        );
+      } else {
+        return _buildBrokenImageIcon(context);
+      }
+    }
+  }
+
+  Widget _buildBrokenImageIcon(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Icon(
+        Icons.broken_image,
+        size: 64,
+        color: Theme.of(context).colorScheme.error,
+      ),
     );
   }
 
@@ -230,47 +366,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (widget.plant.imagePath != null) _buildPlantImage(),
-        const SizedBox(height: 16),
         _buildBasicInfoCard(),
         const SizedBox(height: 16),
         _buildWateringInfoCard(),
       ],
-    );
-  }
-
-  Widget _buildPlantImage() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: kIsWeb
-          ? Image.network(
-              widget.plant.imagePath!,
-              height: 200,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) =>
-                  _buildImagePlaceholder(isError: true),
-            )
-          : File(widget.plant.imagePath!).existsSync()
-              ? Image.file(
-                  File(widget.plant.imagePath!),
-                  height: 200,
-                  fit: BoxFit.cover,
-                )
-              : _buildImagePlaceholder(isError: true),
-    );
-  }
-
-  Widget _buildImagePlaceholder({bool isError = false}) {
-    return Container(
-      height: 200,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Icon(
-        isError ? Icons.broken_image : Icons.eco,
-        size: 64,
-        color: isError
-            ? Theme.of(context).colorScheme.error
-            : Theme.of(context).colorScheme.primary,
-      ),
     );
   }
 
