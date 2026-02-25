@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/plant_provider.dart';
+import '../providers/note_provider.dart';
 import '../models/app_settings.dart';
+import '../services/export_service.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _isExporting = false;
+  bool _isImporting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -108,26 +120,28 @@ class SettingsScreen extends StatelessWidget {
           // Data management
           _buildSectionHeader(context, 'データ管理'),
           ListTile(
-            leading: const Icon(Icons.upload_file),
+            leading: _isExporting
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.upload_file),
             title: const Text('データをエクスポート'),
             subtitle: const Text('すべてのデータをファイルに保存'),
-            onTap: () {
-              // TODO: Export data
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('エクスポート機能は準備中です')),
-              );
-            },
+            onTap: _isExporting ? null : () => _handleExport(context),
           ),
           ListTile(
-            leading: const Icon(Icons.download),
+            leading: _isImporting
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download),
             title: const Text('データをインポート'),
             subtitle: const Text('ファイルからデータを復元'),
-            onTap: () {
-              // TODO: Import data
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('インポート機能は準備中です')),
-              );
-            },
+            onTap: _isImporting ? null : () => _handleImport(context),
           ),
           const Divider(),
 
@@ -160,6 +174,113 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// エクスポート処理
+  Future<void> _handleExport(BuildContext context) async {
+    if (kIsWeb) {
+      // Web 環境: JSON テキストをダイアログで表示（コピー可）
+      setState(() => _isExporting = true);
+      try {
+        final json = await ExportService().exportToJson();
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('エクスポートJSON'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 300,
+              child: SingleChildScrollView(
+                child: SelectableText(json,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('閉じる'),
+              ),
+            ],
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('エクスポートに失敗しました: $e')),
+        );
+      } finally {
+        if (mounted) setState(() => _isExporting = false);
+      }
+      return;
+    }
+
+    // モバイル環境: ファイルに保存
+    setState(() => _isExporting = true);
+    try {
+      final path = await ExportService().exportToFile();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('エクスポートしました: $path')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('エクスポートに失敗しました: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  /// インポート処理
+  Future<void> _handleImport(BuildContext context) async {
+    // 上書き警告
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('データのインポート'),
+        content: const Text(
+          'バックアップファイルを選択してください。\n'
+          '既存のデータは保持され、インポートしたデータが追加・上書きされます。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('ファイルを選択'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isImporting = true);
+    try {
+      final result = await ExportService().importFromFilePicker();
+      if (!mounted) return;
+      if (result == null) {
+        // キャンセル
+        return;
+      }
+      // PlantProvider・NoteProvider を再読み込みして反映
+      await context.read<PlantProvider>().loadPlants();
+      await context.read<NoteProvider>().loadNotes();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('インポートしました（$result）')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('インポートに失敗しました: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+    }
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
