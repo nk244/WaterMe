@@ -179,11 +179,14 @@ class _NotesListScreenState extends State<NotesListScreen> {
                                 elevation: 1,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(12),
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => NoteDetailScreen(note: note),
-                                    ),
-                                  ),
+                                  onTap: () {
+                                    final noteProvider = context.read<NoteProvider>();
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => NoteDetailScreen(note: note),
+                                      ),
+                                    ).then((_) => noteProvider.loadNotes());
+                                  },
                                   child: Padding(
                                     padding: const EdgeInsets.all(12),
                                     child: Column(
@@ -297,9 +300,12 @@ class _NotesListScreenState extends State<NotesListScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AddEditNoteScreen()),
-        ),
+        onPressed: () {
+          final noteProvider = context.read<NoteProvider>();
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AddEditNoteScreen()),
+          ).then((_) => noteProvider.loadNotes());
+        },
         child: const Icon(Icons.edit_outlined),
       ),
     );
