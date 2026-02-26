@@ -52,12 +52,22 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   }
 
   Future<void> _showImageSourceOptions() async {
-    final source = await showModalBottomSheet<ImageSource>(
+    // 既存画像がある場合は「再トリミング」選択肢も表示
+    final hasExistingImage = _imagePath != null || _imageBytes != null;
+
+    // 選択肢の戻り値: ImageSource か 're-crop' か null（キャンセル）
+    final choice = await showModalBottomSheet<Object>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (hasExistingImage)
+              ListTile(
+                leading: const Icon(Icons.crop),
+                title: const Text('登録済み画像を再トリミング'),
+                onTap: () => Navigator.of(ctx).pop('re-crop'),
+              ),
             ListTile(
               leading: const Icon(Icons.camera_alt),
               title: const Text('カメラで撮影'),
@@ -73,7 +83,15 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
       ),
     );
 
-    if (source == null) return;
+    if (choice == null) return;
+
+    // 既存画像を再トリミング
+    if (choice == 're-crop') {
+      await _reCropExistingImage();
+      return;
+    }
+
+    final source = choice as ImageSource;
 
     try {
       final picker = ImagePicker();
@@ -106,6 +124,41 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('画像の取得に失敗しました: $e')),
+        );
+      }
+    }
+  }
+
+  /// 登録済み画像をそのままトリミング画面に渡して再トリミングする
+  Future<void> _reCropExistingImage() async {
+    try {
+      CropResult? cropResult;
+      if (kIsWeb && _imageBytes != null) {
+        // Web: メモリ上のバイト列を XFile 経由で渡す
+        final tmpFile = XFile.fromData(_imageBytes!, mimeType: 'image/jpeg');
+        cropResult = await Navigator.of(context).push<CropResult?>(
+          MaterialPageRoute(
+            builder: (_) => ImageCropScreen.web(xFile: tmpFile),
+          ),
+        );
+        if (cropResult?.bytes != null) {
+          setState(() => _imageBytes = cropResult!.bytes);
+        }
+      } else if (_imagePath != null) {
+        // モバイル: 既存ファイルパスを渡す
+        cropResult = await Navigator.of(context).push<CropResult?>(
+          MaterialPageRoute(
+            builder: (_) => ImageCropScreen.mobile(imagePath: _imagePath!),
+          ),
+        );
+        if (cropResult?.filePath != null) {
+          setState(() => _imagePath = cropResult!.filePath);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('再トリミングに失敗しました: $e')),
         );
       }
     }
