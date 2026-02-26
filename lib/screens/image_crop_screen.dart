@@ -84,8 +84,11 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('画像をトリミング'),
+        backgroundColor: Colors.black54,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.check),
