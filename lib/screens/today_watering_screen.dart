@@ -25,6 +25,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
   Map<String, DateTime?> _nextWateringDateCache = {};
   Set<String> _selectedPlantIds = {};
   Set<LogType> _selectedBulkLogTypes = {LogType.watering};
+  final ScrollController _listScrollController = ScrollController();
 
   @override
   void initState() {
@@ -32,6 +33,12 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshData();
     });
+  }
+
+  @override
+  void dispose() {
+    _listScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -206,11 +213,21 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
   }
 
   Future<void> _refreshAfterLogChange() async {
+    final scrollOffset = _listScrollController.hasClients
+        ? _listScrollController.offset
+        : 0.0;
     await context.read<PlantProvider>().loadPlants();
     await _loadTodayLogs();
     if (mounted) {
       setState(() {
         _selectedPlantIds.clear();
+      });
+      // スクロール位置を復元（リストが再描画された後に適用）
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_listScrollController.hasClients) {
+          final maxScroll = _listScrollController.position.maxScrollExtent;
+          _listScrollController.jumpTo(scrollOffset.clamp(0.0, maxScroll));
+        }
       });
     }
   }
@@ -574,6 +591,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         if (incompletePlants.isNotEmpty) _buildBulkSelectionHeader(incompletePlants),
         Expanded(
           child: ListView.builder(
+            controller: _listScrollController,
             padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80),
             itemCount: incompletePlants.length + 
                        (completedPlants.isNotEmpty ? 1 : 0) + 
@@ -675,7 +693,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
           FilledButton.icon(
             onPressed: _showUnscheduledWateringDialog,
             icon: const Icon(Icons.add),
-            label: const Text('その他の植物に水やり'),
+            label: const Text('水やり記録をつける'),
           ),
         ],
       ),
@@ -742,7 +760,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         child: OutlinedButton.icon(
           onPressed: _showUnscheduledWateringDialog,
           icon: const Icon(Icons.add),
-          label: const Text('その他の植物に水やり'),
+          label: const Text('水やり記録をつける'),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16),
             minimumSize: const Size(double.infinity, 48),
@@ -1105,7 +1123,7 @@ class _UnscheduledWateringDialogState extends State<_UnscheduledWateringDialog> 
         .toList();
 
     return AlertDialog(
-      title: const Text('その他の植物に水やり'),
+      title: const Text('水やり記録をつける'),
       content: SizedBox(
         width: double.maxFinite,
         child: Column(
