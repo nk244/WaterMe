@@ -165,7 +165,10 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
     if (_selectedPlantIds.isEmpty) return;
 
     final plantProvider = context.read<PlantProvider>();
-    
+    // _refreshAfterLogChange() 内で _selectedPlantIds.clear() が呼ばれるため、
+    // 件数は先にローカル変数にコピーしておく (#37)
+    final count = _selectedPlantIds.length;
+
     // Register all selected log types for each plant
     for (final plantId in _selectedPlantIds) {
       for (final logType in _selectedBulkLogTypes) {
@@ -174,7 +177,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
     }
 
     await _refreshAfterLogChange();
-    _showSuccessMessage(_buildLogMessage(_selectedPlantIds.length));
+    _showSuccessMessage(_buildLogMessage(count));
   }
 
   Future<void> _recordLog(

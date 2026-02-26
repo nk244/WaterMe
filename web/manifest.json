@@ -1,6 +1,6 @@
 {
-    "name": "water_me",
-    "short_name": "water_me",
+    "name": "WaterMe",
+    "short_name": "WaterMe",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",

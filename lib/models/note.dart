@@ -1,3 +1,6 @@
+// copyWith の sentinel 値（content を明示的に null にしたい場合に使用）
+const Object _sentinel = Object();
+
 class Note {
   final String id;
   final String title;
@@ -45,9 +48,10 @@ class Note {
     );
   }
 
+  // sentinel: content を明示的に null (削除) にしたい場合は clearContent: true を渡す
   Note copyWith({
     String? title,
-    String? content,
+    Object? content = _sentinel,
     List<String>? imagePaths,
     List<String>? plantIds,
     DateTime? updatedAt,
@@ -55,7 +59,7 @@ class Note {
     return Note(
       id: id,
       title: title ?? this.title,
-      content: content ?? this.content,
+      content: content == _sentinel ? this.content : content as String?,
       imagePaths: imagePaths ?? this.imagePaths,
       plantIds: plantIds ?? this.plantIds,
       createdAt: createdAt,
