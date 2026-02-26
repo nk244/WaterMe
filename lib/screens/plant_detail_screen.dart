@@ -235,14 +235,14 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
             floating: false,
             forceElevated: innerBoxIsScrolled,
             actions: [
-              if (widget.plant.imagePath != null) ...
+              if (widget.plant.imagePath != null)
                 _buildImageOverlayAction(Icons.edit, _navigateToEdit)
               else
                 IconButton(
                   icon: const Icon(Icons.edit),
                   onPressed: _navigateToEdit,
                 ),
-              if (widget.plant.imagePath != null) ...
+              if (widget.plant.imagePath != null)
                 _buildImageOverlayAction(Icons.delete, _deletePlant)
               else
                 IconButton(
