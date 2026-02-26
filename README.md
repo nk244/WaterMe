@@ -8,13 +8,13 @@
 
 | 機能 | 説明 |
 |---|---|
-| 📅 今日の水やり | その日に水やりが必要な植物を一覧表示、ワンタップで完了記録 |
+| 📅 水やりログ | 日付別に水やり・肇料・活力剤の施用履歴を確認・記録。過去ログや未来の予定も確認可能 |
 | 🌿 植物管理 | 名前・品種・購入日・画像などを登録。リスト表示 / グリッド表示を切り替え可能 |
 | 💧 ログ記録 | 水やり・肥料・活力剤の施用履歴を植物ごとに管理 |
 | 📸 植物画像 | カメラ・ギャラリーから画像取得、トリミング対応。詳細画面で背景表示 |
 | 📝 ノート | 植物に紐付けられる自由記述ノート。タイトル・タグ・画像添付に対応 |
 | 🔔 プッシュ通知 | 指定時刻に水やりリマインダーを送信（Android / iOS） |
-| 🎨 テーマ設定 | グリーン / ブルー / パープル / オレンジの 4 テーマ |
+| 🎨 テーマ設定 | グリーン / ブルー / パープル / オレンジの 4 テーマ。ライト / ダーク / システム連動の 3 モード切り替え対応 |
 | 🔄 並び替え | 名前順・購入日順・ドラッグ操作によるカスタム順 |
 | 📤 エクスポート/インポート | JSON 形式でデータをバックアップ・復元 |
 | 🌐 Web 対応 | SharedPreferences によりリロード後もデータを保持 |
@@ -78,7 +78,7 @@ lib/
 │   └── settings_provider.dart       # 設定の状態管理
 ├── screens/
 │   ├── home_screen.dart             # ホーム（タブナビゲーション）
-│   ├── today_watering_screen.dart   # 今日の水やり
+│   ├── today_watering_screen.dart   # 水やりログ（日付別・過去/未来対応）
 │   ├── plant_list_screen.dart       # 植物一覧（リスト/グリッド切り替え）
 │   ├── plant_detail_screen.dart     # 植物詳細（画像背景・タブ表示）
 │   ├── add_plant_screen.dart        # 植物追加・編集
@@ -89,6 +89,7 @@ lib/
 │   └── settings_screen.dart         # 設定（テーマ・通知・データ管理）
 ├── services/
 │   ├── database_service.dart        # SQLite 操作（Android/iOS）
+│   ├── web_storage_service.dart     # SharedPreferences によるデータ永続化（Web）
 │   ├── memory_storage_service.dart  # インメモリストレージ（Web 開発用）
 │   ├── export_service.dart          # JSON エクスポート/インポート
 │   ├── log_service.dart             # 水やりログ集計
@@ -115,7 +116,8 @@ lib/
 | `crop_your_image` | ^1.0.0 | 画像トリミング |
 | `flutter_local_notifications` | ^20.1.0 | ローカルプッシュ通知 |
 | `timezone` | ^0.10.1 | タイムゾーン管理 |
-| `intl` | ^0.19.0 | 日付フォーマット（ja） |
+| `flutter_localizations` | SDK | カレンダー・UI の日本語ローカライゼーション |
+| `intl` | ^0.20.2 | 日付フォーマット（ja） |
 | `file_picker` | ^10.3.10 | エクスポート/インポート用ファイル選択 |
 | `permission_handler` | ^11.2.0 | ランタイムパーミッション |
 | `uuid` | ^4.3.3 | UUID 生成 |
