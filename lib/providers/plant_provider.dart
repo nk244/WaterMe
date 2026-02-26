@@ -331,4 +331,53 @@ class PlantProvider with ChangeNotifier {
       await _db!.deleteLog(logId);
     }
   }
+
+  /// すべての植物の水やり間隔を指定した日数に一括設定する（interval が null の植物もセット）
+  Future<void> bulkUpdateWateringInterval(int days) async {
+    for (final plant in _plants) {
+      final updated = Plant(
+        id: plant.id,
+        name: plant.name,
+        variety: plant.variety,
+        purchaseDate: plant.purchaseDate,
+        purchaseLocation: plant.purchaseLocation,
+        imagePath: plant.imagePath,
+        wateringIntervalDays: days,
+        createdAt: plant.createdAt,
+        updatedAt: DateTime.now(),
+      );
+      if (kIsWeb) {
+        await _web!.updatePlant(updated);
+      } else {
+        await _db!.updatePlant(updated);
+      }
+    }
+    await loadPlants();
+  }
+
+  /// 水やり間隔が設定されている植物のみ、現在値に delta を加算して一括調整する
+  /// 結果は最低 1 日にクランプする
+  Future<void> bulkAdjustWateringInterval(int delta) async {
+    for (final plant in _plants) {
+      if (plant.wateringIntervalDays == null) continue;
+      final newDays = (plant.wateringIntervalDays! + delta).clamp(1, 9999);
+      final updated = Plant(
+        id: plant.id,
+        name: plant.name,
+        variety: plant.variety,
+        purchaseDate: plant.purchaseDate,
+        purchaseLocation: plant.purchaseLocation,
+        imagePath: plant.imagePath,
+        wateringIntervalDays: newDays,
+        createdAt: plant.createdAt,
+        updatedAt: DateTime.now(),
+      );
+      if (kIsWeb) {
+        await _web!.updatePlant(updated);
+      } else {
+        await _db!.updatePlant(updated);
+      }
+    }
+    await loadPlants();
+  }
 }
