@@ -117,6 +117,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
+          // Watering interval bulk settings
+          _buildSectionHeader(context, '水やり間隔'),
+          ListTile(
+            leading: const Icon(Icons.water_drop),
+            title: const Text('水やり間隔を一括設定'),
+            subtitle: const Text('すべての植物の間隔を同じ日数に変更'),
+            onTap: () => _showBulkSetIntervalDialog(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.tune),
+            title: const Text('水やり間隔を一括調整'),
+            subtitle: const Text('設定済みの植物の間隔を一定日数ずつ増減'),
+            onTap: () => _showBulkAdjustIntervalDialog(context),
+          ),
+          const Divider(),
+
           // Data management
           _buildSectionHeader(context, 'データ管理'),
           ListTile(
@@ -174,6 +190,142 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  /// 水やり間隔を一括設定するダイアログ
+  Future<void> _showBulkSetIntervalDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('水やり間隔を一括設定'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('すべての植物の水やり間隔を指定した日数に変更します。'),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '日数',
+                  suffixText: '日',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  if (n == null || n < 1) return '1以上の整数を入力してください';
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(true);
+              }
+            },
+            child: const Text('設定'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final days = int.parse(controller.text);
+    if (!mounted) return;
+    try {
+      await context.read<PlantProvider>().bulkUpdateWateringInterval(days);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('すべての植物の水やり間隔を $days 日に設定しました')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('更新に失敗しました: $e')),
+      );
+    }
+  }
+
+  /// 水やり間隔を一括調整するダイアログ（増減）
+  Future<void> _showBulkAdjustIntervalDialog(BuildContext context) async {
+    int delta = 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('水やり間隔を一括調整'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('水やり間隔が設定されている植物の\n間隔を一定日数ずつ増減します。'),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.remove),
+                    onPressed: () => setDialogState(() => delta--),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 72,
+                    child: Text(
+                      '${delta > 0 ? '+' : ''}$delta 日',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(ctx).textTheme.titleLarge,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.add),
+                    onPressed: () => setDialogState(() => delta++),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: delta == 0 ? null : () => Navigator.of(ctx).pop(true),
+              child: const Text('適用'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    try {
+      await context.read<PlantProvider>().bulkAdjustWateringInterval(delta);
+      if (!mounted) return;
+      final label = delta > 0 ? '+$delta' : '$delta';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('水やり間隔を $label 日調整しました')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('更新に失敗しました: $e')),
+      );
+    }
   }
 
   /// エクスポート処理
