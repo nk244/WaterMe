@@ -73,3 +73,6 @@ app.*.map.json
 # OS specific files
 Thumbs.db
 desktop.ini
+
+# GitHub Copilot instructions (プロジェクト固有の設定のためバージョン管理対象外)
+.github/
