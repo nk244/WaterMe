@@ -159,6 +159,26 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
     }
   }
 
+  /// 画像背景上でも見やすいアクションボタンを生成する（半透明の丸背景付き）
+  Widget _buildImageOverlayAction(IconData icon, VoidCallback onPressed) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: IconButton(
+          icon: Icon(icon, color: Colors.white),
+          onPressed: onPressed,
+          iconSize: 22,
+          padding: const EdgeInsets.all(6),
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        ),
+      ),
+    );
+  }
+
   Future<void> _deletePlant() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -215,16 +235,27 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
             floating: false,
             forceElevated: innerBoxIsScrolled,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.edit),
-                onPressed: _navigateToEdit,
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete),
-                onPressed: _deletePlant,
-              ),
+              if (widget.plant.imagePath != null) ...
+                _buildImageOverlayAction(Icons.edit, _navigateToEdit)
+              else
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: _navigateToEdit,
+                ),
+              if (widget.plant.imagePath != null) ...
+                _buildImageOverlayAction(Icons.delete, _deletePlant)
+              else
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: _deletePlant,
+                ),
             ],
             flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsetsDirectional.only(
+                start: 16,
+                bottom: 16,
+                end: 16,
+              ),
               title: Text(
                 widget.plant.name,
                 style: const TextStyle(
