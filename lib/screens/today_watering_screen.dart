@@ -175,13 +175,11 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
     // _refreshAfterLogChange() 内で _selectedPlantIds.clear() が呼ばれるため、
     // 件数は先にローカル変数にコピーしておく (#37)
     final count = _selectedPlantIds.length;
+    final plantIds = _selectedPlantIds.toList();
+    final logTypes = _selectedBulkLogTypes.toList();
 
-    // Register all selected log types for each plant
-    for (final plantId in _selectedPlantIds) {
-      for (final logType in _selectedBulkLogTypes) {
-        await _recordLog(plantProvider, plantId, logType);
-      }
-    }
+    // bulkRecordLogs で全挿入後に loadPlants を1回だけ呼ぶ (#50 ちらつき修正)
+    await plantProvider.bulkRecordLogs(plantIds, logTypes, _selectedDate);
 
     await _refreshAfterLogChange();
     _showSuccessMessage(_buildLogMessage(count));

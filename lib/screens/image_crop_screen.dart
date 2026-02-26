@@ -109,6 +109,7 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
                   onCropped: _onCropped,
                   aspectRatio: 1,
                   withCircleUi: false,
+                  interactive: true,
                 ),
                 if (_isCropping)
                   const Center(child: CircularProgressIndicator()),

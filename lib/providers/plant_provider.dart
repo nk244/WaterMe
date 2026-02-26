@@ -221,6 +221,36 @@ class PlantProvider with ChangeNotifier {
     await loadPlants();
   }
 
+  /// 複数植物 × 複数ログタイプの記録を一括挿入し、最後に loadPlants を。1回呼ぶ。
+  /// 一括水やり登録時の画面チラツキを防止する (#50)。
+  Future<void> bulkRecordLogs(
+    List<String> plantIds,
+    List<LogType> logTypes,
+    DateTime date,
+  ) async {
+    final now = DateTime.now();
+    for (final plantId in plantIds) {
+      for (final logType in logTypes) {
+        final log = LogEntry(
+          id: const Uuid().v4(),
+          plantId: plantId,
+          type: logType,
+          date: date,
+          note: null,
+          createdAt: now,
+          updatedAt: now,
+        );
+        if (kIsWeb) {
+          await _web!.insertLog(log);
+        } else {
+          await _db!.insertLog(log);
+        }
+      }
+    }
+    // 全挿入完了後に、1回だけ再読み込み
+    await loadPlants();
+  }
+
   // 動的に次回水やり日を計算（記録から算出）
   Future<DateTime?> calculateNextWateringDate(String plantId) async {
     Plant? plant;
