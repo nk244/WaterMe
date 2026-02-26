@@ -230,6 +230,11 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
                 style: const TextStyle(
                   shadows: [
                     Shadow(
+                      offset: Offset(0, 2),
+                      blurRadius: 8,
+                      color: Colors.black87,
+                    ),
+                    Shadow(
                       offset: Offset(0, 1),
                       blurRadius: 4,
                       color: Colors.black54,
@@ -276,8 +281,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black45],
-                stops: [0.5, 1.0],
+                colors: [Colors.transparent, Colors.black87],
+                stops: [0.3, 1.0],
               ),
             ),
           ),
