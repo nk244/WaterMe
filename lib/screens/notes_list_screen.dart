@@ -88,38 +88,45 @@ class _NotesListScreenState extends State<NotesListScreen> {
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text('植物で絞り込む',
                   style: Theme.of(context).textTheme.titleMedium),
             ),
-            ListTile(
-              leading: const Icon(Icons.all_inclusive),
-              title: const Text('すべて'),
-              trailing: _filterPlantId == null
-                  ? Icon(Icons.check,
-                      color: Theme.of(context).colorScheme.primary)
-                  : null,
-              onTap: () {
-                setState(() => _filterPlantId = null);
-                Navigator.of(ctx).pop();
-              },
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.all_inclusive),
+                    title: const Text('すべて'),
+                    trailing: _filterPlantId == null
+                        ? Icon(Icons.check,
+                            color: Theme.of(context).colorScheme.primary)
+                        : null,
+                    onTap: () {
+                      setState(() => _filterPlantId = null);
+                      Navigator.of(ctx).pop();
+                    },
+                  ),
+                  ...plants.map((p) => ListTile(
+                        leading: const Icon(Icons.eco),
+                        title: Text(p.name),
+                        trailing: _filterPlantId == p.id
+                            ? Icon(Icons.check,
+                                color: Theme.of(context).colorScheme.primary)
+                            : null,
+                        onTap: () {
+                          setState(() => _filterPlantId = p.id);
+                          Navigator.of(ctx).pop();
+                        },
+                      )),
+                ],
+              ),
             ),
-            ...plants.map((p) => ListTile(
-                  leading: const Icon(Icons.eco),
-                  title: Text(p.name),
-                  trailing: _filterPlantId == p.id
-                      ? Icon(Icons.check,
-                          color: Theme.of(context).colorScheme.primary)
-                      : null,
-                  onTap: () {
-                    setState(() => _filterPlantId = p.id);
-                    Navigator.of(ctx).pop();
-                  },
-                )),
             const SizedBox(height: 8),
           ],
         ),
@@ -290,7 +297,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
           .firstOrNull;
       if (name != null) parts.add(name);
     }
-    return parts.join(' ・ ') + ' で絞り込み中';
+    return '${parts.join(' ・ ')} で絞り込み中';
   }
 
   Widget _buildNoteList(
