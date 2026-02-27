@@ -12,7 +12,7 @@ class PlantProvider with ChangeNotifier {
   final WebStorageService? _web = kIsWeb ? WebStorageService() : null;
   List<Plant> _plants = [];
   bool _isLoading = false;
-  Map<String, DateTime?> _nextWateringCache = {};
+  final Map<String, DateTime?> _nextWateringCache = {};
 
   List<Plant> get plants => _plants;
   bool get isLoading => _isLoading;
@@ -66,6 +66,12 @@ class PlantProvider with ChangeNotifier {
           if (b.purchaseDate == null) return -1;
           return a.purchaseDate!.compareTo(b.purchaseDate!);
         });
+        break;
+      case PlantSortOrder.createdAtAsc:
+        plantsCopy.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        break;
+      case PlantSortOrder.createdAtDesc:
+        plantsCopy.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         break;
       case PlantSortOrder.custom:
         if (customOrder.isNotEmpty) {

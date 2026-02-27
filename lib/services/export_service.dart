@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/plant.dart';
 import '../models/log_entry.dart';
@@ -42,19 +41,30 @@ class ExportService {
     return const JsonEncoder.withIndent('  ').convert(data);
   }
 
-  /// JSON をファイルに保存してパスを返す（モバイル専用）
+  /// JSON をユーザーが選択した保存先に書き込む（モバイル専用）
   ///
-  /// Web 環境では [UnsupportedError] をスローする。
-  Future<String> exportToFile() async {
+  /// キャンセル時は null を返す。Web 環境では [UnsupportedError] をスローする。
+  Future<String?> exportToFile() async {
     if (kIsWeb) {
       throw UnsupportedError('Web 環境ではファイル保存に対応していません。');
     }
 
-    final jsonStr = await exportToJson();
-    final dir = await getApplicationDocumentsDirectory();
     final fileName =
         'waterme_backup_${DateTime.now().millisecondsSinceEpoch}.json';
-    final file = File('${dir.path}/$fileName');
+
+    // ユーザーに保存先フォルダを選択させる
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'エクスポート先を選択',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+
+    // キャンセル時
+    if (savePath == null) return null;
+
+    final jsonStr = await exportToJson();
+    final file = File(savePath);
     await file.writeAsString(jsonStr, encoding: utf8);
     return file.path;
   }
