@@ -1,6 +1,6 @@
 {
-    "name": "WaterMe",
-    "short_name": "WaterMe",
+    "name": "Botanote",
+    "short_name": "Botanote",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
