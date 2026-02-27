@@ -283,6 +283,10 @@ class _PlantListScreenState extends State<PlantListScreen> {
         return '購入日が新しい順';
       case PlantSortOrder.purchaseDateAsc:
         return '購入日が古い順';
+      case PlantSortOrder.createdAtAsc:
+        return '登録日が古い順';
+      case PlantSortOrder.createdAtDesc:
+        return '登録日が新しい順';
       case PlantSortOrder.custom:
         return 'カスタム（ドラッグで並び替え）';
     }
@@ -296,6 +300,9 @@ class _PlantListScreenState extends State<PlantListScreen> {
       case PlantSortOrder.purchaseDateDesc:
       case PlantSortOrder.purchaseDateAsc:
         return Icons.calendar_today;
+      case PlantSortOrder.createdAtAsc:
+      case PlantSortOrder.createdAtDesc:
+        return Icons.access_time;
       case PlantSortOrder.custom:
         return Icons.reorder;
     }

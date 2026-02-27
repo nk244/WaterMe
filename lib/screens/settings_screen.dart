@@ -70,7 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         color: _getThemeColor(theme),
                       ),
                     );
-                  }).toList(),
+                  }),
                 ],
               );
             },
@@ -372,6 +372,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final path = await ExportService().exportToFile();
       if (!mounted) return;
+      if (path == null) {
+        // ユーザーがキャンセル
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('エクスポートしました: $path')),
       );

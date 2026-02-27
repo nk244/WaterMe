@@ -21,6 +21,8 @@ enum PlantSortOrder {
   nameDesc,          // 名前降順
   purchaseDateDesc,  // 購入日が新しい順
   purchaseDateAsc,   // 購入日が古い順
+  createdAtAsc,      // 登録日が古い順
+  createdAtDesc,     // 登録日が新しい順
   custom,            // ユーザー指定
 }
 
@@ -101,7 +103,7 @@ class AppSettings {
     this.notificationHour = 9,
     this.notificationMinute = 0,
     LogTypeColors? logTypeColors,
-    this.plantSortOrder = PlantSortOrder.nameAsc,
+    this.plantSortOrder = PlantSortOrder.createdAtAsc,
     this.customSortOrder = const [],
   }) : logTypeColors = logTypeColors ?? LogTypeColors();
 
@@ -143,7 +145,7 @@ class AppSettings {
           : LogTypeColors(),
       plantSortOrder: PlantSortOrder.values.firstWhere(
         (e) => e.name == map['plantSortOrder'],
-        orElse: () => PlantSortOrder.nameAsc,
+        orElse: () => PlantSortOrder.createdAtAsc,
       ),
       customSortOrder: map['customSortOrder'] != null
           ? List<String>.from(map['customSortOrder'])
