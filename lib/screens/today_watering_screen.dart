@@ -147,6 +147,10 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         if (a.purchaseDate == null) return 1;
         if (b.purchaseDate == null) return -1;
         return a.purchaseDate!.compareTo(b.purchaseDate!);
+      case PlantSortOrder.createdAtAsc:
+        return a.createdAt.compareTo(b.createdAt);
+      case PlantSortOrder.createdAtDesc:
+        return b.createdAt.compareTo(a.createdAt);
       case PlantSortOrder.custom:
         final customOrder = settings.customSortOrder;
         if (customOrder.isNotEmpty) {
