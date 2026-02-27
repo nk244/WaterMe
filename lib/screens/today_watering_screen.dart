@@ -23,8 +23,8 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
   DateTime _selectedDate = DateTime.now();
   DailyLogStatus _logStatus = DailyLogStatus.empty();
   Map<String, DateTime?> _nextWateringDateCache = {};
-  Set<String> _selectedPlantIds = {};
-  Set<LogType> _selectedBulkLogTypes = {LogType.watering};
+  final Set<String> _selectedPlantIds = {};
+  final Set<LogType> _selectedBulkLogTypes = {LogType.watering};
   final ScrollController _listScrollController = ScrollController();
 
   @override
@@ -207,7 +207,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
     final actionNames = _selectedBulkLogTypes
         .map((type) => _getLogTypeName(type))
         .join('・');
-    return '${count}件の${actionNames}を登録しました';
+    return '$count件の$actionNamesを登録しました';
   }
 
   Future<void> _refreshAfterLogChange() async {
@@ -310,6 +310,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('水やりログ'),
+        scrolledUnderElevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -611,7 +612,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
             },
           ),
         ),
-        _buildAddUnscheduledWateringButton(),
+        _buildAddUnscheduledWateringButton(hasPlants: true),
       ],
     );
   }
@@ -740,7 +741,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
     );
   }
 
-  Widget _buildAddUnscheduledWateringButton() {
+  Widget _buildAddUnscheduledWateringButton({bool hasPlants = false}) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -758,7 +759,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         child: OutlinedButton.icon(
           onPressed: _showUnscheduledWateringDialog,
           icon: const Icon(Icons.add),
-          label: const Text('水やり記録をつける'),
+          label: Text(hasPlants ? 'その他の植物に水やり' : '水やり記録をつける'),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16),
             minimumSize: const Size(double.infinity, 48),
@@ -811,7 +812,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         final logTypeNames = selectedLogTypes
             .map((type) => _getLogTypeName(type))
             .join('・');
-        _showSuccessMessage('${selectedPlant.name}に${logTypeNames}を記録しました');
+        _showSuccessMessage('${selectedPlant.name}に$logTypeNamesを記録しました');
       }
     }
   }
