@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../providers/plant_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/plant.dart';
@@ -21,6 +22,8 @@ class TodayWateringScreen extends StatefulWidget {
 
 class _TodayWateringScreenState extends State<TodayWateringScreen> {
   DateTime _selectedDate = DateTime.now();
+  DateTime _focusedDay = DateTime.now();
+  bool _isCalendarView = false;
   DailyLogStatus _logStatus = DailyLogStatus.empty();
   Map<String, DateTime?> _nextWateringDateCache = {};
   final Set<String> _selectedPlantIds = {};
@@ -317,6 +320,11 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         scrolledUnderElevation: 0,
         actions: [
           IconButton(
+            icon: Icon(_isCalendarView ? Icons.list : Icons.calendar_today),
+            tooltip: _isCalendarView ? 'リスト表示' : 'カレンダー表示',
+            onPressed: () => setState(() => _isCalendarView = !_isCalendarView),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.of(context).push(
@@ -328,7 +336,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
           ),
         ],
       ),
-      body: _buildLogList(isToday),
+      body: _isCalendarView ? _buildCalendarView() : _buildLogList(isToday),
       floatingActionButton: _selectedPlantIds.isNotEmpty
           ? Column(
               mainAxisSize: MainAxisSize.min,
@@ -448,6 +456,65 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
     );
   }
 
+  Widget _buildCalendarView() {
+    return Consumer<PlantProvider>(
+      builder: (context, plantProvider, _) {
+        final logDates = plantProvider.logDates;
+
+        return Column(
+          children: [
+            TableCalendar(
+              firstDay: DateTime(2020),
+              lastDay: DateTime.now().add(const Duration(days: 365)),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(_selectedDate, day),
+              onDaySelected: (selectedDay, focusedDay) {
+                setState(() {
+                  _selectedDate = selectedDay;
+                  _focusedDay = focusedDay;
+                  _selectedPlantIds.clear();
+                });
+                _loadTodayLogs();
+              },
+              onPageChanged: (focusedDay) {
+                setState(() {
+                  _focusedDay = focusedDay;
+                });
+              },
+              eventLoader: (day) {
+                final d = DateTime(day.year, day.month, day.day);
+                return logDates.contains(d) ? [true] : [];
+              },
+              calendarStyle: CalendarStyle(
+                markerDecoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                todayDecoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+              ),
+              locale: 'ja_JP',
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _buildLogListBody(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildLogList(bool isToday) {
     return Consumer<PlantProvider>(
       builder: (context, plantProvider, _) {
@@ -460,6 +527,32 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         return Column(
           children: [
             _buildDateSelector(isToday),
+            if (_logStatus.hasAnyRecords) _buildSummary(),
+            Expanded(
+              child: _buildPlantList(plantsForDate, isToday),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLogListBody() {
+    final today = DateTime.now();
+    final isToday = _selectedDate.year == today.year &&
+        _selectedDate.month == today.month &&
+        _selectedDate.day == today.day;
+
+    return Consumer<PlantProvider>(
+      builder: (context, plantProvider, _) {
+        if (plantProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final plantsForDate = _getPlantsForDate(plantProvider.plants);
+
+        return Column(
+          children: [
             if (_logStatus.hasAnyRecords) _buildSummary(),
             Expanded(
               child: _buildPlantList(plantsForDate, isToday),

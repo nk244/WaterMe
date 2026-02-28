@@ -11,10 +11,13 @@ class PlantProvider with ChangeNotifier {
   final WebStorageService? _web = kIsWeb ? WebStorageService() : null;
   List<Plant> _plants = [];
   bool _isLoading = false;
-  final Map<String, DateTime?> _nextWateringCache = {};
+  Map<String, DateTime?> _nextWateringCache = {};
+  /// カレンダー表示用: 記録がある日付のセット（日付部のみ、時刻なし）
+  Set<DateTime> _logDatesCache = {};
 
   List<Plant> get plants => _plants;
   bool get isLoading => _isLoading;
+  Set<DateTime> get logDates => _logDatesCache;
 
   Future<void> loadPlants() async {
     _isLoading = true;
@@ -30,6 +33,13 @@ class PlantProvider with ChangeNotifier {
       // Update next watering date cache
       for (var plant in _plants) {
         _nextWateringCache[plant.id] = await calculateNextWateringDate(plant.id);
+      }
+      // Update log dates cache for calendar
+      if (!kIsWeb) {
+        final allLogs = await _db!.getAllLogs();
+        _logDatesCache = allLogs
+            .map((l) => DateTime(l.date.year, l.date.month, l.date.day))
+            .toSet();
       }
     } catch (e) {
       debugPrint('Error loading plants: $e');
