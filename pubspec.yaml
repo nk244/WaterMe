@@ -60,6 +60,7 @@ dependencies:
   # File handling (export/import)
   path: ^1.8.3
   file_picker: ^10.3.10
+  archive: ^4.0.9
   permission_handler: ^11.2.0
   
   # UUID generation
