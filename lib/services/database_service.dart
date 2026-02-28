@@ -153,6 +153,15 @@ class DatabaseService {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<List<LogEntry>> getAllLogs() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'logs',
+      orderBy: 'date DESC',
+    );
+    return List.generate(maps.length, (i) => LogEntry.fromMap(maps[i]));
+  }
+
   Future<List<LogEntry>> getLogsByPlant(String plantId) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
