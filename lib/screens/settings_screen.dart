@@ -144,7 +144,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   )
                 : const Icon(Icons.upload_file),
             title: const Text('データをエクスポート'),
-            subtitle: const Text('すべてのデータをファイルに保存'),
+            subtitle: const Text('植物・ログ・画像を ZIP ファイルに保存'),
             onTap: _isExporting ? null : () => _handleExport(context),
           ),
           ListTile(
@@ -156,7 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   )
                 : const Icon(Icons.download),
             title: const Text('データをインポート'),
-            subtitle: const Text('ファイルからデータを復元'),
+            subtitle: const Text('ZIP または JSON ファイルからデータを復元'),
             onTap: _isImporting ? null : () => _handleImport(context),
           ),
           const Divider(),
@@ -397,7 +397,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('データのインポート'),
         content: const Text(
-          'バックアップファイルを選択してください。\n'
+          'バックアップファイル（.zip または .json）を選択してください。\n'
           '既存のデータは保持され、インポートしたデータが追加・上書きされます。',
         ),
         actions: [

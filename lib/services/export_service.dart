@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:archive/archive_io.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../models/plant.dart';
 import '../models/log_entry.dart';
 import '../models/note.dart';
@@ -9,8 +13,15 @@ import 'database_service.dart';
 
 /// データのエクスポート / インポートを担うサービス
 ///
-/// JSON 形式で Plants / Logs / Notes を一括保存・復元する。
-/// Web ではファイルの直接保存が困難なため、エクスポートはクリップボード向け JSON を返す。
+/// モバイル: 画像を含む ZIP アーカイブとして保存・復元する。
+/// ZIP 構成:
+///   waterme_backup_XXXXXX.zip
+///   ├── data.json          # Plants / Logs / Notes (imagePath は ZIP 内相対パス)
+///   └── images/
+///       ├── plants/<plant_id>.jpg
+///       └── notes/<note_id>_<index>.jpg
+///
+/// Web: テキスト JSON のみ（画像なし）。
 class ExportService {
   static final ExportService _instance = ExportService._internal();
   factory ExportService() => _instance;
@@ -20,7 +31,7 @@ class ExportService {
 
   // ── エクスポート ──────────────────────────────────────────
 
-  /// 全データを JSON 文字列に変換して返す
+  /// 全データを JSON 文字列に変換して返す（Web 用・画像パスは絶対パスのまま）
   Future<String> exportToJson() async {
     final plants = await _db.getAllPlants();
     final allLogs = <LogEntry>[];
@@ -33,7 +44,7 @@ class ExportService {
     final data = {
       'version': 1,
       'exportedAt': DateTime.now().toIso8601String(),
-      'plants': plants.map((p) => p.toMap()).toList(),
+      'plants': plants.map((pl) => pl.toMap()).toList(),
       'logs': allLogs.map((l) => l.toMap()).toList(),
       'notes': notes.map((n) => n.toMap()).toList(),
     };
@@ -41,7 +52,7 @@ class ExportService {
     return const JsonEncoder.withIndent('  ').convert(data);
   }
 
-  /// JSON をユーザーが選択した保存先に書き込む（モバイル専用）
+  /// ZIP をユーザーが選択した保存先に書き込む（モバイル専用）
   ///
   /// キャンセル時は null を返す。Web 環境では [UnsupportedError] をスローする。
   Future<String?> exportToFile() async {
@@ -49,76 +60,202 @@ class ExportService {
       throw UnsupportedError('Web 環境ではファイル保存に対応していません。');
     }
 
-    final fileName =
-        'waterme_backup_${DateTime.now().millisecondsSinceEpoch}.json';
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final fileName = 'botanote_backup_$ts.zip';
 
-    // ユーザーに保存先フォルダを選択させる
     final savePath = await FilePicker.platform.saveFile(
       dialogTitle: 'エクスポート先を選択',
       fileName: fileName,
       type: FileType.custom,
-      allowedExtensions: ['json'],
+      allowedExtensions: ['zip'],
     );
 
-    // キャンセル時
     if (savePath == null) return null;
 
-    final jsonStr = await exportToJson();
+    // ZIP バイト列を生成してファイルに書き出す
+    final zipBytes = await _buildZipBytes();
     final file = File(savePath);
-    await file.writeAsString(jsonStr, encoding: utf8);
+    await file.writeAsBytes(zipBytes);
     return file.path;
+  }
+
+  /// ZIP バイト列を生成する
+  Future<Uint8List> _buildZipBytes() async {
+    final plants = await _db.getAllPlants();
+    final allLogs = <LogEntry>[];
+    for (final plant in plants) {
+      final logs = await _db.getLogsByPlant(plant.id);
+      allLogs.addAll(logs);
+    }
+    final notes = await _db.getAllNotes();
+
+    final archive = Archive();
+
+    // ── 植物画像を収集 ──
+    final plantMaps = <Map<String, dynamic>>[];
+    for (final plant in plants) {
+      final map = plant.toMap();
+      if (plant.imagePath != null) {
+        final imgFile = File(plant.imagePath!);
+        if (await imgFile.exists()) {
+          final ext = p.extension(plant.imagePath!).isNotEmpty
+              ? p.extension(plant.imagePath!)
+              : '.jpg';
+          final zipPath = 'images/plants/${plant.id}$ext';
+          archive.addFile(
+            ArchiveFile(zipPath, await imgFile.length(),
+                await imgFile.readAsBytes()),
+          );
+          map['imagePath'] = zipPath; // ZIP 内相対パスに変換
+        } else {
+          map['imagePath'] = null;
+        }
+      }
+      plantMaps.add(map);
+    }
+
+    // ── ノート画像を収集 ──
+    final noteMaps = <Map<String, dynamic>>[];
+    for (final note in notes) {
+      final map = note.toMap();
+      if (note.imagePaths.isNotEmpty) {
+        final zipRelPaths = <String>[];
+        for (int i = 0; i < note.imagePaths.length; i++) {
+          final imgFile = File(note.imagePaths[i]);
+          if (await imgFile.exists()) {
+            final ext = p.extension(note.imagePaths[i]).isNotEmpty
+                ? p.extension(note.imagePaths[i])
+                : '.jpg';
+            final zipPath = 'images/notes/${note.id}_$i$ext';
+            archive.addFile(
+              ArchiveFile(zipPath, await imgFile.length(),
+                  await imgFile.readAsBytes()),
+            );
+            zipRelPaths.add(zipPath);
+          }
+        }
+        // imagePaths を ZIP 内相対パスの '|' 区切りに変換
+        map['imagePaths'] = zipRelPaths.join('|');
+      }
+      noteMaps.add(map);
+    }
+
+    // ── data.json を生成 ──
+    final data = {
+      'version': 2,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'plants': plantMaps,
+      'logs': allLogs.map((l) => l.toMap()).toList(),
+      'notes': noteMaps,
+    };
+    final jsonBytes = utf8.encode(const JsonEncoder.withIndent('  ').convert(data));
+    archive.addFile(ArchiveFile('data.json', jsonBytes.length, jsonBytes));
+
+    // ZIP エンコード
+    return Uint8List.fromList(ZipEncoder().encode(archive)!);
   }
 
   // ── インポート ────────────────────────────────────────────
 
-  /// ファイルピッカーでファイルを選択して JSON をインポートする
+  /// ファイルピッカーでファイルを選択してインポートする（ZIP / JSON 両対応）
   ///
   /// 戻り値: 成功した場合は [ImportResult]、キャンセルの場合は null
   Future<ImportResult?> importFromFilePicker() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['json'],
-      withData: kIsWeb, // Web ではバイトを直接読む
+      allowedExtensions: ['zip', 'json'],
+      withData: kIsWeb,
     );
 
     if (result == null || result.files.isEmpty) return null;
 
-    String jsonStr;
+    final file = result.files.first;
+
     if (kIsWeb) {
-      // Web: bytes から文字列に変換
-      final bytes = result.files.first.bytes;
+      final bytes = file.bytes;
       if (bytes == null) return null;
-      jsonStr = utf8.decode(bytes);
-    } else {
-      // モバイル: ファイルパスから読み込む
-      final path = result.files.first.path;
-      if (path == null) return null;
-      jsonStr = await File(path).readAsString(encoding: utf8);
+      // Web は JSON のみ
+      return _importFromJson(utf8.decode(bytes));
     }
 
-    return _importFromJson(jsonStr);
+    final path = file.path;
+    if (path == null) return null;
+
+    if (path.toLowerCase().endsWith('.zip')) {
+      return _importFromZip(path);
+    } else {
+      final jsonStr = await File(path).readAsString(encoding: utf8);
+      return _importFromJson(jsonStr);
+    }
+  }
+
+  /// ZIP ファイルからデータを復元する
+  Future<ImportResult> _importFromZip(String zipPath) async {
+    final bytes = await File(zipPath).readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    // ── data.json を取得 ──
+    final jsonEntry = archive.findFile('data.json');
+    if (jsonEntry == null) {
+      throw const FormatException('ZIP 内に data.json が見つかりません');
+    }
+    final jsonStr = utf8.decode(jsonEntry.content as List<int>);
+    final Map<String, dynamic> data =
+        jsonDecode(jsonStr) as Map<String, dynamic>;
+
+    final version = data['version'] as int? ?? 1;
+    if (version > 2) {
+      throw FormatException('未対応のバックアップバージョン: $version');
+    }
+
+    // ── 画像をドキュメントディレクトリに展開 ──
+    final docsDir = await getApplicationDocumentsDirectory();
+    // ZIP 内相対パス → 絶対パス のマップ
+    final pathMap = <String, String>{};
+    for (final entry in archive) {
+      if (entry.isFile && entry.name.startsWith('images/')) {
+        final destPath = p.join(docsDir.path, entry.name);
+        final destFile = File(destPath);
+        await destFile.parent.create(recursive: true);
+        await destFile.writeAsBytes(entry.content as List<int>);
+        pathMap[entry.name] = destPath;
+      }
+    }
+
+    // ── DB にデータを保存 ──
+    return _importData(data, pathMap);
   }
 
   /// JSON 文字列からデータを復元する（既存データは保持して追加/上書き）
   Future<ImportResult> _importFromJson(String jsonStr) async {
     final Map<String, dynamic> data =
         jsonDecode(jsonStr) as Map<String, dynamic>;
-
-    // バージョン確認（将来の互換対応用）
     final version = data['version'] as int? ?? 1;
-    if (version > 1) {
+    if (version > 2) {
       throw FormatException('未対応のバックアップバージョン: $version');
     }
+    return _importData(data, const {});
+  }
 
+  /// [data] を DB に保存する。[pathMap] は ZIP 内相対パス→絶対パスの対応表。
+  Future<ImportResult> _importData(
+    Map<String, dynamic> data,
+    Map<String, String> pathMap,
+  ) async {
     int plantCount = 0;
     int logCount = 0;
     int noteCount = 0;
 
     // 植物をインポート
     final plantsJson = data['plants'] as List<dynamic>? ?? [];
-    for (final p in plantsJson) {
-      final plant = Plant.fromMap(Map<String, dynamic>.from(p as Map));
-      await _db.insertPlant(plant);
+    for (final p0 in plantsJson) {
+      final map = Map<String, dynamic>.from(p0 as Map);
+      // 画像パスを絶対パスに解決
+      if (map['imagePath'] != null) {
+        final rel = map['imagePath'] as String;
+        map['imagePath'] = pathMap[rel] ?? map['imagePath'];
+      }
+      await _db.insertPlant(Plant.fromMap(map));
       plantCount++;
     }
 
@@ -133,8 +270,17 @@ class ExportService {
     // ノートをインポート
     final notesJson = data['notes'] as List<dynamic>? ?? [];
     for (final n in notesJson) {
-      final note = Note.fromMap(Map<String, dynamic>.from(n as Map));
-      await _db.insertNote(note);
+      final map = Map<String, dynamic>.from(n as Map);
+      // imagePaths を絶対パスに解決（'|' 区切り文字列）
+      if (map['imagePaths'] != null && (map['imagePaths'] as String).isNotEmpty) {
+        final relPaths = (map['imagePaths'] as String).split('|');
+        final absPaths = relPaths
+            .map((rel) => pathMap[rel] ?? rel)
+            .where((path) => path.isNotEmpty)
+            .toList();
+        map['imagePaths'] = absPaths.join('|');
+      }
+      await _db.insertNote(Note.fromMap(map));
       noteCount++;
     }
 
