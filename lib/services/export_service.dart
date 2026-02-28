@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/plant.dart';
 import '../models/log_entry.dart';
 import '../models/note.dart';
@@ -52,7 +53,7 @@ class ExportService {
     return const JsonEncoder.withIndent('  ').convert(data);
   }
 
-  /// ZIP をユーザーが選択した保存先に書き込む（モバイル専用）
+  /// ZIP を一時ディレクトリに生成し、OS のシェアシートで共有する（モバイル専用）
   ///
   /// キャンセル時は null を返す。Web 環境では [UnsupportedError] をスローする。
   Future<String?> exportToFile() async {
@@ -63,20 +64,20 @@ class ExportService {
     final ts = DateTime.now().millisecondsSinceEpoch;
     final fileName = 'botanote_backup_$ts.zip';
 
-    final savePath = await FilePicker.platform.saveFile(
-      dialogTitle: 'エクスポート先を選択',
-      fileName: fileName,
-      type: FileType.custom,
-      allowedExtensions: ['zip'],
+    // ZIP バイト列を生成して一時ファイルに書き出す
+    final zipBytes = await _buildZipBytes();
+    final tmpDir = await getTemporaryDirectory();
+    final tmpFile = File(p.join(tmpDir.path, fileName));
+    await tmpFile.writeAsBytes(zipBytes);
+
+    // OS のシェアシート経由で保存先を選ばせる
+    final result = await Share.shareXFiles(
+      [XFile(tmpFile.path, mimeType: 'application/zip')],
+      subject: 'Botanote バックアップ',
     );
 
-    if (savePath == null) return null;
-
-    // ZIP バイト列を生成してファイルに書き出す
-    final zipBytes = await _buildZipBytes();
-    final file = File(savePath);
-    await file.writeAsBytes(zipBytes);
-    return file.path;
+    if (result.status == ShareResultStatus.dismissed) return null;
+    return tmpFile.path;
   }
 
   /// ZIP バイト列を生成する
@@ -152,7 +153,7 @@ class ExportService {
     archive.addFile(ArchiveFile('data.json', jsonBytes.length, jsonBytes));
 
     // ZIP エンコード
-    return Uint8List.fromList(ZipEncoder().encode(archive)!);
+    return Uint8List.fromList(ZipEncoder().encode(archive));
   }
 
   // ── インポート ────────────────────────────────────────────
