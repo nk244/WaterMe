@@ -26,6 +26,12 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   
   DateTime? _purchaseDate;
   int? _wateringInterval;
+  // 肥料間隔（どちらか一方のみ非null）
+  int? _fertilizerIntervalDays;
+  int? _fertilizerEveryNWaterings;
+  // 活力剤間隔（どちらか一方のみ非null）
+  int? _vitalizerIntervalDays;
+  int? _vitalizerEveryNWaterings;
   String? _imagePath;
   Uint8List? _imageBytes; // Web用: トリミング後のバイト列
   bool _isLoading = false;
@@ -39,6 +45,10 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
       _purchaseLocationController.text = widget.plant!.purchaseLocation ?? '';
       _purchaseDate = widget.plant!.purchaseDate;
       _wateringInterval = widget.plant!.wateringIntervalDays;
+      _fertilizerIntervalDays = widget.plant!.fertilizerIntervalDays;
+      _fertilizerEveryNWaterings = widget.plant!.fertilizerEveryNWaterings;
+      _vitalizerIntervalDays = widget.plant!.vitalizerIntervalDays;
+      _vitalizerEveryNWaterings = widget.plant!.vitalizerEveryNWaterings;
       _imagePath = widget.plant!.imagePath;
     }
   }
@@ -194,6 +204,10 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
               : _purchaseLocationController.text.trim(),
           imagePath: effectiveImagePath,
           wateringIntervalDays: _wateringInterval,
+          fertilizerIntervalDays: _fertilizerIntervalDays,
+          fertilizerEveryNWaterings: _fertilizerEveryNWaterings,
+          vitalizerIntervalDays: _vitalizerIntervalDays,
+          vitalizerEveryNWaterings: _vitalizerEveryNWaterings,
         );
       } else {
         // Update existing plant
@@ -208,6 +222,10 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
               : _purchaseLocationController.text.trim(),
           imagePath: effectiveImagePath,
           wateringIntervalDays: _wateringInterval,
+          fertilizerIntervalDays: _fertilizerIntervalDays,
+          fertilizerEveryNWaterings: _fertilizerEveryNWaterings,
+          vitalizerIntervalDays: _vitalizerIntervalDays,
+          vitalizerEveryNWaterings: _vitalizerEveryNWaterings,
         );
         await plantProvider.updatePlant(updatedPlant);
       }
@@ -426,9 +444,81 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
               },
             ),
             const Divider(),
+
+            // Fertilizer interval
+            _buildLogIntervalTile(
+              icon: Icons.grass,
+              label: '肥料間隔',
+              intervalDays: _fertilizerIntervalDays,
+              everyNWaterings: _fertilizerEveryNWaterings,
+              onChanged: (days, every) => setState(() {
+                _fertilizerIntervalDays = days;
+                _fertilizerEveryNWaterings = every;
+              }),
+              wateringIntervalDays: _wateringInterval,
+            ),
+
+            // Vitalizer interval
+            _buildLogIntervalTile(
+              icon: Icons.favorite,
+              label: '活力剤間隔',
+              intervalDays: _vitalizerIntervalDays,
+              everyNWaterings: _vitalizerEveryNWaterings,
+              onChanged: (days, every) => setState(() {
+                _vitalizerIntervalDays = days;
+                _vitalizerEveryNWaterings = every;
+              }),
+              wateringIntervalDays: _wateringInterval,
+            ),
+            const Divider(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLogIntervalTile({
+    required IconData icon,
+    required String label,
+    required int? intervalDays,
+    required int? everyNWaterings,
+    required void Function(int? days, int? every) onChanged,
+    int? wateringIntervalDays,
+  }) {
+    String subtitle;
+    if (intervalDays != null) {
+      subtitle = '$intervalDays日ごと';
+    } else if (everyNWaterings != null) {
+      subtitle = '水やり${everyNWaterings}回に1回';
+    } else {
+      subtitle = '未設定';
+    }
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon),
+      title: Text(label),
+      subtitle: Text(subtitle),
+      trailing: (intervalDays != null || everyNWaterings != null)
+          ? IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () => onChanged(null, null),
+            )
+          : null,
+      onTap: () async {
+        final result = await showDialog<_IntervalResult>(
+          context: context,
+          builder: (context) => _LogIntervalDialog(
+            label: label,
+            initialDays: intervalDays,
+            initialEveryN: everyNWaterings,
+            wateringIntervalDays: wateringIntervalDays,
+          ),
+        );
+        if (result != null) {
+          onChanged(result.days, result.everyN);
+        }
+      },
     );
   }
 }
@@ -480,6 +570,120 @@ class _WateringIntervalDialogState extends State<_WateringIntervalDialog> {
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_days),
+          child: const Text('設定'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 肥料・活力剤の間隔設定ダイアログの戻り値
+class _IntervalResult {
+  final int? days;
+  final int? everyN;
+  const _IntervalResult({this.days, this.everyN});
+}
+
+/// 肥料・活力剤の間隔設定ダイアログ
+/// モード: 日数指定 / 水やりN回に1回
+class _LogIntervalDialog extends StatefulWidget {
+  final String label;
+  final int? initialDays;
+  final int? initialEveryN;
+  final int? wateringIntervalDays;
+
+  const _LogIntervalDialog({
+    required this.label,
+    this.initialDays,
+    this.initialEveryN,
+    this.wateringIntervalDays,
+  });
+
+  @override
+  State<_LogIntervalDialog> createState() => _LogIntervalDialogState();
+}
+
+class _LogIntervalDialogState extends State<_LogIntervalDialog> {
+  // 0 = 日数指定, 1 = 水やりN回に1回
+  late int _modeIndex;
+  late int _days;
+  late int _everyN;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEveryN != null) {
+      _modeIndex = 1;
+      _everyN = widget.initialEveryN!;
+      _days = widget.initialDays ?? 7;
+    } else {
+      _modeIndex = 0;
+      _days = widget.initialDays ?? 7;
+      _everyN = widget.initialEveryN ?? 2;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.label),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // モード切り替え
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 0, label: Text('日数指定')),
+              ButtonSegment(value: 1, label: Text('水やりN回に1回')),
+            ],
+            selected: {_modeIndex},
+            onSelectionChanged: (s) => setState(() => _modeIndex = s.first),
+          ),
+          const SizedBox(height: 16),
+          if (_modeIndex == 0) ...[
+            Text('$_days日ごと',
+                style: Theme.of(context).textTheme.headlineSmall),
+            Slider(
+              value: _days.toDouble(),
+              min: 1,
+              max: 60,
+              divisions: 59,
+              label: '$_days日',
+              onChanged: (v) => setState(() => _days = v.toInt()),
+            ),
+          ] else ...[
+            Text('水やり${_everyN}回に1回',
+                style: Theme.of(context).textTheme.headlineSmall),
+            Slider(
+              value: _everyN.toDouble(),
+              min: 2,
+              max: 10,
+              divisions: 8,
+              label: '${_everyN}回に1回',
+              onChanged: (v) => setState(() => _everyN = v.toInt()),
+            ),
+            if (widget.wateringIntervalDays != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '≈ ${widget.wateringIntervalDays! * _everyN}日ごと',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(
+            _modeIndex == 0
+                ? _IntervalResult(days: _days)
+                : _IntervalResult(everyN: _everyN),
+          ),
           child: const Text('設定'),
         ),
       ],

@@ -106,6 +106,10 @@ class PlantProvider with ChangeNotifier {
     String? purchaseLocation,
     String? imagePath,
     int? wateringIntervalDays,
+    int? fertilizerIntervalDays,
+    int? fertilizerEveryNWaterings,
+    int? vitalizerIntervalDays,
+    int? vitalizerEveryNWaterings,
   }) async {
     final now = DateTime.now();
     final plant = Plant(
@@ -116,6 +120,10 @@ class PlantProvider with ChangeNotifier {
       purchaseLocation: purchaseLocation,
       imagePath: imagePath,
       wateringIntervalDays: wateringIntervalDays,
+      fertilizerIntervalDays: fertilizerIntervalDays,
+      fertilizerEveryNWaterings: fertilizerEveryNWaterings,
+      vitalizerIntervalDays: vitalizerIntervalDays,
+      vitalizerEveryNWaterings: vitalizerEveryNWaterings,
       createdAt: now,
       updatedAt: now,
     );

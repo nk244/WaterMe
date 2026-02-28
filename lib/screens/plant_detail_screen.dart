@@ -443,6 +443,13 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
         _buildBasicInfoCard(),
         const SizedBox(height: 16),
         _buildWateringInfoCard(),
+        if (widget.plant.fertilizerIntervalDays != null ||
+            widget.plant.fertilizerEveryNWaterings != null ||
+            widget.plant.vitalizerIntervalDays != null ||
+            widget.plant.vitalizerEveryNWaterings != null) ...[
+          const SizedBox(height: 16),
+          _buildFertilizerInfoCard(),
+        ],
       ],
     );
   }
@@ -481,6 +488,36 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
             valueColor: _nextWateringDate!.isBefore(DateTime.now())
                 ? Theme.of(context).colorScheme.error
                 : null,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildFertilizerInfoCard() {
+    String _intervalText(int? days, int? everyN) {
+      if (days != null) return '$days日ごと';
+      if (everyN != null) return '水やり${everyN}回に1回';
+      return '未設定';
+    }
+
+    return _InfoCard(
+      title: '施肥情報',
+      children: [
+        if (widget.plant.fertilizerIntervalDays != null ||
+            widget.plant.fertilizerEveryNWaterings != null)
+          _InfoRow(
+            label: '肥料間隔',
+            value: _intervalText(
+                widget.plant.fertilizerIntervalDays,
+                widget.plant.fertilizerEveryNWaterings),
+          ),
+        if (widget.plant.vitalizerIntervalDays != null ||
+            widget.plant.vitalizerEveryNWaterings != null)
+          _InfoRow(
+            label: '活力剤間隔',
+            value: _intervalText(
+                widget.plant.vitalizerIntervalDays,
+                widget.plant.vitalizerEveryNWaterings),
           ),
       ],
     );
