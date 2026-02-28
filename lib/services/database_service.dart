@@ -31,7 +31,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'water_me.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -56,6 +56,22 @@ class DatabaseService {
             // ignore if column already exists
           }
         }
+        if (oldVersion < 4) {
+          // add fertilizer/vitalizer interval columns to plants
+          for (final col in [
+            'fertilizerIntervalDays',
+            'fertilizerEveryNWaterings',
+            'vitalizerIntervalDays',
+            'vitalizerEveryNWaterings',
+          ]) {
+            try {
+              await db.execute(
+                  'ALTER TABLE plants ADD COLUMN $col INTEGER');
+            } catch (_) {
+              // ignore if column already exists
+            }
+          }
+        }
       },
     );
   }
@@ -70,6 +86,10 @@ class DatabaseService {
         purchaseLocation TEXT,
         imagePath TEXT,
         wateringIntervalDays INTEGER,
+        fertilizerIntervalDays INTEGER,
+        fertilizerEveryNWaterings INTEGER,
+        vitalizerIntervalDays INTEGER,
+        vitalizerEveryNWaterings INTEGER,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
