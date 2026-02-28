@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/plant.dart';
 import '../models/log_entry.dart';
-import '../models/note.dart';
 import '../models/app_settings.dart';
 import '../services/database_service.dart';
 import '../services/web_storage_service.dart';

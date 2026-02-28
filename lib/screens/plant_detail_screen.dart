@@ -55,7 +55,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _loadData();
   }
 
@@ -143,7 +143,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
   void _showSuccessMessage(String logTypeName) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${logTypeName}を記録しました')),
+        SnackBar(content: Text('$logTypeNameを記録しました')),
       );
     }
   }
@@ -219,9 +219,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
       controller: _tabController,
       tabs: const [
         Tab(text: '情報'),
-        Tab(text: '水やり'),
-        Tab(text: '肥料'),
-        Tab(text: '活力剤'),
+        Tab(text: 'ログ'),
       ],
     );
 
@@ -288,9 +286,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
           controller: _tabController,
           children: [
             _buildInfoTab(),
-            _buildLogTab(_wateringLogs, LogType.watering),
-            _buildLogTab(_fertilizerLogs, LogType.fertilizer),
-            _buildLogTab(_vitalizerLogs, LogType.vitalizer),
+            _buildUnifiedLogTab(),
           ],
         ),
       ),
@@ -378,12 +374,55 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
 
   Widget _buildFloatingActionButton(bool needsWatering) {
     return FloatingActionButton.extended(
-      onPressed: () => _recordLog(LogType.watering),
-      icon: const Icon(Icons.water_drop),
-      label: const Text('水やり'),
+      onPressed: _showLogTypeBottomSheet,
+      icon: const Icon(Icons.add),
+      label: const Text('記録'),
       backgroundColor: needsWatering
           ? Theme.of(context).colorScheme.error
           : null,
+    );
+  }
+
+  void _showLogTypeBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('記録の種類を選んでください',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ),
+            ListTile(
+              leading: const Icon(Icons.water_drop),
+              title: const Text('水やり'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _recordLog(LogType.watering);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.grass),
+              title: const Text('肝料'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _recordLog(LogType.fertilizer);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.favorite),
+              title: const Text('活力剤'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _recordLog(LogType.vitalizer);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 
@@ -448,39 +487,46 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
     );
   }
 
-  Widget _buildLogTab(List<LogEntry> logs, LogType type) {
-    if (logs.isEmpty) {
-      return _buildEmptyState(type);
-    }
+  Widget _buildUnifiedLogTab() {
+    // 全ログを日付降順でマージ
+    final allLogs = [
+      ..._wateringLogs,
+      ..._fertilizerLogs,
+      ..._vitalizerLogs,
+    ]..sort((a, b) => b.date.compareTo(a.date));
 
-    // Sort logs by date descending (newest first)
-    final sortedLogs = List<LogEntry>.from(logs)
-      ..sort((a, b) => b.date.compareTo(a.date));
+    if (allLogs.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.history,
+              size: 64,
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'まだログがありません',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '「記録」ボタンから水やり・肝料・活力剤を記録できます',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      );
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.all(8),
-      itemCount: sortedLogs.length,
-      itemBuilder: (context, index) => _buildLogCard(sortedLogs[index], type),
-    );
-  }
-
-  Widget _buildEmptyState(LogType type) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            _getIconForLogType(type),
-            size: 64,
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'ログがありません',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-        ],
-      ),
+      itemCount: allLogs.length,
+      itemBuilder: (context, index) {
+        final log = allLogs[index];
+        return _buildLogCard(log, log.type);
+      },
     );
   }
 
