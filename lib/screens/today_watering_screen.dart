@@ -336,7 +336,18 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
           ),
         ],
       ),
-      body: _isCalendarView ? _buildCalendarView() : _buildLogList(isToday),
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          // 左スワイプ → 翌日、右スワイプ → 前日
+          if (details.primaryVelocity == null) return;
+          if (details.primaryVelocity! < -300) {
+            _changeDate(1);
+          } else if (details.primaryVelocity! > 300) {
+            _changeDate(-1);
+          }
+        },
+        child: _isCalendarView ? _buildCalendarView() : _buildLogList(isToday),
+      ),
       floatingActionButton: _selectedPlantIds.isNotEmpty
           ? Column(
               mainAxisSize: MainAxisSize.min,

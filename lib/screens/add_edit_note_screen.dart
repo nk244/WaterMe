@@ -9,7 +9,8 @@ import '../providers/note_provider.dart';
 
 class AddEditNoteScreen extends StatefulWidget {
   final Note? note;
-  const AddEditNoteScreen({this.note, super.key});
+  final String? initialPlantId;
+  const AddEditNoteScreen({this.note, this.initialPlantId, super.key});
 
   @override
   State<AddEditNoteScreen> createState() => _AddEditNoteScreenState();
@@ -27,7 +28,8 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
     super.initState();
     _titleController = TextEditingController(text: widget.note?.title ?? '');
     _contentController = TextEditingController(text: widget.note?.content ?? '');
-    _selectedPlantIds = widget.note?.plantIds ?? [];
+    _selectedPlantIds = widget.note?.plantIds ??
+        (widget.initialPlantId != null ? [widget.initialPlantId!] : []);
     _selectedImagePaths = widget.note?.imagePaths ?? [];
   }
 

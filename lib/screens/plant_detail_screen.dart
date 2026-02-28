@@ -5,8 +5,11 @@ import 'dart:io';
 import '../models/plant.dart';
 import '../models/log_entry.dart';
 import '../providers/plant_provider.dart';
+import '../providers/note_provider.dart';
 import '../utils/date_utils.dart';
 import 'add_plant_screen.dart';
+import 'add_edit_note_screen.dart';
+import 'note_detail_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// SliverPersistentHeaderDelegate: TabBarを固定表示するためのデリゲート
@@ -55,7 +58,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadData();
   }
 
@@ -211,15 +214,13 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    final needsWatering = _nextWateringDate != null &&
-        !_nextWateringDate!.isAfter(AppDateUtils.getDateOnly(DateTime.now()));
-
     // TabBar ウィジェット（SliverPersistentHeader に渡す）
     final tabBar = TabBar(
       controller: _tabController,
-      tabs: const [
+        tabs: const [
         Tab(text: '情報'),
         Tab(text: 'ログ'),
+        Tab(text: 'ノート'),
       ],
     );
 
@@ -233,6 +234,14 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
             floating: false,
             forceElevated: innerBoxIsScrolled,
             actions: [
+              if (widget.plant.imagePath != null)
+                _buildImageOverlayAction(Icons.add, _showLogTypeBottomSheet)
+              else
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: '記録',
+                  onPressed: _showLogTypeBottomSheet,
+                ),
               if (widget.plant.imagePath != null)
                 _buildImageOverlayAction(Icons.edit, _navigateToEdit)
               else
@@ -287,10 +296,11 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
           children: [
             _buildInfoTab(),
             _buildUnifiedLogTab(),
+            _buildNoteTab(),
           ],
         ),
       ),
-      floatingActionButton: _buildFloatingActionButton(needsWatering),
+      // FAB は不要のため削除 (#69)
     );
   }
 
@@ -369,17 +379,6 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
         size: 64,
         color: Theme.of(context).colorScheme.error,
       ),
-    );
-  }
-
-  Widget _buildFloatingActionButton(bool needsWatering) {
-    return FloatingActionButton.extended(
-      onPressed: _showLogTypeBottomSheet,
-      icon: const Icon(Icons.add),
-      label: const Text('記録'),
-      backgroundColor: needsWatering
-          ? Theme.of(context).colorScheme.error
-          : null,
     );
   }
 
@@ -530,8 +529,74 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
     );
   }
 
-  Widget _buildLogCard(LogEntry log, LogType type) {
-    return Card(
+  Widget _buildNoteTab() {
+    return Consumer<NoteProvider>(
+      builder: (context, noteProvider, _) {
+        final plantNotes = noteProvider.notes
+            .where((n) => n.plantIds.contains(widget.plant.id))
+            .toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+        if (plantNotes.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.note_outlined,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'まだノートがありません',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AddEditNoteScreen(
+                        initialPlantId: widget.plant.id,
+                      ),
+                    ),
+                  ).then((_) => context.read<NoteProvider>().loadNotes()),
+                  icon: const Icon(Icons.add),
+                  label: const Text('ノートを追加'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(8),
+          itemCount: plantNotes.length,
+          itemBuilder: (context, index) {
+            final note = plantNotes[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              child: ListTile(
+                leading: const Icon(Icons.note),
+                title: Text(note.title),
+                subtitle: Text(
+                  DateFormat('yyyy年MM月dd日').format(note.updatedAt),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => NoteDetailScreen(note: note),
+                  ),
+                ).then((_) => context.read<NoteProvider>().loadNotes()),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLogCard(LogEntry log, LogType type) {    return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: ListTile(
         leading: Icon(_getIconForLogType(type)),

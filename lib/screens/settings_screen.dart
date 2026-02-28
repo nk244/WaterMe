@@ -377,7 +377,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('エクスポートしました: $path')),
+        const SnackBar(content: Text('バックアップファイルを共有しました')),
       );
     } catch (e) {
       if (!mounted) return;
