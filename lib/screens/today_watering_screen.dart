@@ -112,9 +112,11 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         return !nextDay.isAfter(selectedDay);
       }
 
-      // 過去の日付：その日ちょうどに予定が来る植物のみ（変更なし）
+      // 過去の日付：その日の実績把握
+      // → その日が予定日だった植物（ちょうどその日）+ その日時点で超過していた植物（予定日がその日以前）
+      // ※ 記録がある植物は plantsWithRecords で別途カバーされる
       if (selectedDay.isBefore(todayDay)) {
-        return nextDay.isAtSameMomentAs(selectedDay);
+        return !nextDay.isAfter(selectedDay);
       }
 
       // 未来の日付（#91）：その日に予定が来る植物 + 今日時点ですでに超過している植物
