@@ -343,7 +343,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
           child: Icon(
             Icons.eco,
             size: 72,
-            color: colorScheme.onPrimaryContainer.withOpacity(0.5),
+            color: colorScheme.onPrimaryContainer.withValues(alpha: 0.5),
           ),
         ),
       );
@@ -494,9 +494,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
   }
 
   Widget _buildFertilizerInfoCard() {
-    String _intervalText(int? days, int? everyN) {
+    String intervalText(int? days, int? everyN) {
       if (days != null) return '$days日ごと';
-      if (everyN != null) return '水やり${everyN}回に1回';
+      if (everyN != null) return '水やり$everyN回に1回';
       return '未設定';
     }
 
@@ -507,7 +507,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
             widget.plant.fertilizerEveryNWaterings != null)
           _InfoRow(
             label: '肥料間隔',
-            value: _intervalText(
+            value: intervalText(
                 widget.plant.fertilizerIntervalDays,
                 widget.plant.fertilizerEveryNWaterings),
           ),
@@ -515,7 +515,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
             widget.plant.vitalizerEveryNWaterings != null)
           _InfoRow(
             label: '活力剤間隔',
-            value: _intervalText(
+            value: intervalText(
                 widget.plant.vitalizerIntervalDays,
                 widget.plant.vitalizerEveryNWaterings),
           ),
@@ -539,7 +539,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
             Icon(
               Icons.history,
               size: 64,
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -582,7 +582,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> with SingleTicker
                 Icon(
                   Icons.note_outlined,
                   size: 64,
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -719,7 +719,7 @@ class _InfoRow extends StatelessWidget {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withOpacity(0.6),
+                        .withValues(alpha: 0.6),
                   ),
             ),
           ),

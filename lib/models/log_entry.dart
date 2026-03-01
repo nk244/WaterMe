@@ -1,19 +1,36 @@
+/// ログの種別を表す列挙型
 enum LogType {
+  /// 水やり
   watering,
+
+  /// 肥料
   fertilizer,
+
+  /// 活力剤
   vitalizer,
 }
 
+/// 植物へのケアログ（水やり・肥料・活力剤）データモデル
 class LogEntry {
+  /// ログの一意識別子（UUID v4）
   final String id;
+
+  /// 対象植物のID
   final String plantId;
+
+  /// ログ種別
   final LogType type;
+
+  /// 記録日時
   final DateTime date;
+
+  /// メモ
   final String? note;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  LogEntry({
+  const LogEntry({
     required this.id,
     required this.plantId,
     required this.type,
@@ -23,6 +40,7 @@ class LogEntry {
     required this.updatedAt,
   });
 
+  /// DBへの保存用 Map に変換する。
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -35,18 +53,20 @@ class LogEntry {
     };
   }
 
+  /// DB から取得した Map を LogEntry に変換する。
   factory LogEntry.fromMap(Map<String, dynamic> map) {
     return LogEntry(
-      id: map['id'],
-      plantId: map['plantId'],
+      id: map['id'] as String,
+      plantId: map['plantId'] as String,
       type: LogType.values.firstWhere((e) => e.name == map['type']),
-      date: DateTime.parse(map['date']),
-      note: map['note'],
-      createdAt: DateTime.parse(map['createdAt']),
-      updatedAt: DateTime.parse(map['updatedAt']),
+      date: DateTime.parse(map['date'] as String),
+      note: map['note'] as String?,
+      createdAt: DateTime.parse(map['createdAt'] as String),
+      updatedAt: DateTime.parse(map['updatedAt'] as String),
     );
   }
 
+  /// フィールドを部分的に更新した新しい LogEntry を返す。
   LogEntry copyWith({
     DateTime? date,
     String? note,

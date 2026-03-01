@@ -1,5 +1,6 @@
 import '../models/plant.dart';
 import '../models/log_entry.dart';
+import '../models/note.dart';
 import '../data/test_data_generator.dart';
 
 class MemoryStorageService {
@@ -15,7 +16,7 @@ class MemoryStorageService {
 
   final List<Plant> _plants = [];
   final List<LogEntry> _logs = [];
-  final List _notes = [];
+  final List<Map<String, dynamic>> _notes = [];
   bool _isInitialized = false;
 
   void _initializeTestData() {
@@ -85,17 +86,23 @@ class MemoryStorageService {
     _logs.removeWhere((l) => l.id == id);
   }
 
-  // Note operations
-  Future<void> insertNote(note) async {
+  // ── Note 操作 ──
+
+  /// ノートを挿入または上書きする。
+  Future<void> insertNote(Note note) async {
     _notes.removeWhere((n) => n['id'] == note.id);
     _notes.add(note.toMap());
   }
 
-  Future<List> getAllNotes() async {
-    return List.from(_notes)..sort((a, b) => b['updatedAt'].compareTo(a['updatedAt']));
+  /// すべてのノートを取得する。
+  Future<List<Map<String, dynamic>>> getAllNotes() async {
+    return List.from(_notes)
+      ..sort((a, b) =>
+          (b['updatedAt'] as String).compareTo(a['updatedAt'] as String));
   }
 
-  Future<void> updateNote(note) async {
+  /// ノートを更新する。
+  Future<void> updateNote(Note note) async {
     _notes.removeWhere((n) => n['id'] == note.id);
     _notes.add(note.toMap());
   }

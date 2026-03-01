@@ -4,15 +4,23 @@ import '../models/note.dart';
 import '../services/database_service.dart';
 import '../services/web_storage_service.dart';
 
+/// ノートデータを管理する Provider。
+///
+/// [DatabaseService](モバイル) または [WebStorageService](Web) を介して永続化する。
 class NoteProvider with ChangeNotifier {
+  /// モバイル環境用 DBサービス（Web時は null）
   final DatabaseService? _db = kIsWeb ? null : DatabaseService();
+
+  /// Web 環境用ストレージ（非 Web 時は null）
   final WebStorageService? _web = kIsWeb ? WebStorageService() : null;
+
   List<Note> _notes = [];
   bool _isLoading = false;
 
   List<Note> get notes => _notes;
   bool get isLoading => _isLoading;
 
+  /// ノート一覧をストレージから再読み込みする。
   Future<void> loadNotes() async {
     _isLoading = true;
     notifyListeners();
@@ -25,14 +33,20 @@ class NoteProvider with ChangeNotifier {
         _notes = await _db!.getAllNotes();
       }
     } catch (e) {
-      debugPrint('Error loading notes: $e');
+      debugPrint('ノート読み込みエラー: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> addNote({required String title, String? content, List<String>? plantIds, List<String>? imagePaths}) async {
+  /// 新しいノートを追加する。
+  Future<void> addNote({
+    required String title,
+    String? content,
+    List<String>? plantIds,
+    List<String>? imagePaths,
+  }) async {
     final now = DateTime.now();
     final note = Note(
       id: const Uuid().v4(),
@@ -53,6 +67,7 @@ class NoteProvider with ChangeNotifier {
     await loadNotes();
   }
 
+  /// 既存のノートを更新する。
   Future<void> updateNote(Note note) async {
     if (kIsWeb) {
       await _web!.updateNote(note);
@@ -62,6 +77,7 @@ class NoteProvider with ChangeNotifier {
     await loadNotes();
   }
 
+  /// 指定IDのノートを削除する。
   Future<void> deleteNote(String id) async {
     if (kIsWeb) {
       await _web!.deleteNote(id);

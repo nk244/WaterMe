@@ -6,19 +6,29 @@ import '../models/app_settings.dart';
 import '../services/database_service.dart';
 import '../services/web_storage_service.dart';
 
+/// 植物データとログを管理する Provider。
+///
+/// [DatabaseService](モバイル) または [WebStorageService](Web) を介して
+/// 永続化する。ビジネスロジックの集約点として機能する。
 class PlantProvider with ChangeNotifier {
+  /// モバイル環境用 DBサービス（Web時は null）
   final DatabaseService? _db = kIsWeb ? null : DatabaseService();
+
+  /// Web 環境用ストレージ（非 Web 時は null）
   final WebStorageService? _web = kIsWeb ? WebStorageService() : null;
+
   List<Plant> _plants = [];
   bool _isLoading = false;
-  Map<String, DateTime?> _nextWateringCache = {};
-  /// カレンダー表示用: 記録がある日付のセット（日付部のみ、時刻なし）
+  final Map<String, DateTime?> _nextWateringCache = {};
+
+  /// カレンダー表示用：ログが存在する日付のセット（時刻なし）
   Set<DateTime> _logDatesCache = {};
 
   List<Plant> get plants => _plants;
   bool get isLoading => _isLoading;
   Set<DateTime> get logDates => _logDatesCache;
 
+  /// 植物一覧をストレージから再読み込み、キャッシュを更新する。
   Future<void> loadPlants() async {
     _isLoading = true;
     notifyListeners();
@@ -30,11 +40,11 @@ class PlantProvider with ChangeNotifier {
         _plants = await _db!.getAllPlants();
       }
       
-      // Update next watering date cache
+      // 次回水やり日キャッシュを更新
       for (var plant in _plants) {
         _nextWateringCache[plant.id] = await calculateNextWateringDate(plant.id);
       }
-      // Update log dates cache for calendar
+      // カレンダー表示用のログ日付セットを更新
       if (!kIsWeb) {
         final allLogs = await _db!.getAllLogs();
         _logDatesCache = allLogs
@@ -49,7 +59,7 @@ class PlantProvider with ChangeNotifier {
     }
   }
 
-  /// Get sorted plants based on settings
+  /// ソート設定に従ってソートした植物一覧を返す。
   List<Plant> getSortedPlants(PlantSortOrder sortOrder, List<String> customOrder) {
     final plantsCopy = List<Plant>.from(_plants);
     
@@ -158,7 +168,7 @@ class PlantProvider with ChangeNotifier {
     await loadPlants();
   }
 
-  /// 削除された植物IDを、参照しているすべてのノートの plantIds から除去する
+  /// 削除された植物IDを参照しているすべてのノートの plantIds から除去する。
   Future<void> _removePlantIdFromNotes(String plantId) async {
     try {
       if (kIsWeb) {
@@ -199,11 +209,12 @@ class PlantProvider with ChangeNotifier {
       await _db!.insertLog(log);
     }
 
-    // nextWateringDateは動的に計算するため、ここでは更新しない
+  // nextWateringDate はログから動的に計算するため、ログ記録時にはキャッシュ更新不要
 
     await loadPlants();
   }
 
+  /// 肥料ログを記録する。
   Future<void> recordFertilizer(String plantId, DateTime date, String? note) async {
     final log = LogEntry(
       id: const Uuid().v4(),
@@ -224,6 +235,7 @@ class PlantProvider with ChangeNotifier {
     await loadPlants();
   }
 
+  /// 活力剤ログを記録する。
   Future<void> recordVitalizer(String plantId, DateTime date, String? note) async {
     final log = LogEntry(
       id: const Uuid().v4(),
@@ -244,8 +256,8 @@ class PlantProvider with ChangeNotifier {
     await loadPlants();
   }
 
-  /// 複数植物 × 複数ログタイプの記録を一括挿入し、最後に loadPlants を。1回呼ぶ。
-  /// 一括水やり登録時の画面チラツキを防止する (#50)。
+  /// 複数植物 × 複数ログ種別を一括挿入し、最後に loadPlants を 1回呼び出す。
+  /// 画面のチラツキを防止するために一括登録時に使用する。
   Future<void> bulkRecordLogs(
     List<String> plantIds,
     List<LogType> logTypes,
@@ -270,11 +282,13 @@ class PlantProvider with ChangeNotifier {
         }
       }
     }
-    // 全挿入完了後に、1回だけ再読み込み
+    // 全挿入完了後に1回だけ再読み込み
     await loadPlants();
   }
 
-  // 動的に次回水やり日を計算（記録から算出）
+  /// 最終水やりログから次回水やり日を動的に計算する。
+  /// 水やり間隔が未設定の場合は null を返す。
+  // 動的に次回水やり日を計算（ログから算出）
   Future<DateTime?> calculateNextWateringDate(String plantId) async {
     Plant? plant;
     if (kIsWeb) {
@@ -294,18 +308,18 @@ class PlantProvider with ChangeNotifier {
     }
 
     if (wateringLogs.isEmpty) {
-      // 記録がない場合は、購入日または作成日から計算
+      // ログなしの場合は購入日または登録日から計算
       final baseDate = plant.purchaseDate ?? plant.createdAt;
       return baseDate.add(Duration(days: plant.wateringIntervalDays!));
     }
 
-    // 最新の記録から計算
+    // 最新のログから計算
     wateringLogs.sort((a, b) => b.date.compareTo(a.date));
     final lastWatering = wateringLogs.first;
     return lastWatering.date.add(Duration(days: plant.wateringIntervalDays!));
   }
 
-  /// Gets logs for a specific plant and type on a specific date
+  /// 指定植物・種別・日付のログ一覧を取得する。
   Future<List<LogEntry>> getLogsForDate(
     String plantId,
     LogType logType,
@@ -327,7 +341,7 @@ class PlantProvider with ChangeNotifier {
     }).toList();
   }
 
-  /// Checks if a plant has any log of given type on a specific date
+  /// 指定日に指定種別のログが存在するかチェックする。
   Future<bool> hasLogOnDate(
     String plantId,
     LogType logType,
@@ -337,7 +351,7 @@ class PlantProvider with ChangeNotifier {
     return logs.isNotEmpty;
   }
 
-  /// Deletes all logs of given type for a plant on a specific date
+  /// 指定日の指定種別ログをすべて削除する。
   Future<void> deleteLogsForDate(
     String plantId,
     LogType logType,
@@ -353,7 +367,7 @@ class PlantProvider with ChangeNotifier {
     }
   }
 
-  /// Deletes multiple log types for a plant on a specific date
+  /// 指定日の複数種別のログを一括削除する。
   Future<void> deleteMultipleLogsForDate(
     String plantId,
     List<LogType> logTypes,
@@ -364,7 +378,7 @@ class PlantProvider with ChangeNotifier {
     }
   }
 
-  /// Gets all logs for a specific plant and type (not filtered by date)
+  /// 指定植物・種別の全ログを取得する（日付フィルターなし）。
   Future<List<LogEntry>> getAllLogsForPlantAndType(
     String plantId,
     LogType logType,
@@ -376,7 +390,7 @@ class PlantProvider with ChangeNotifier {
     }
   }
 
-  /// Deletes a specific log by ID
+  /// 指定IDのログを削除する。
   Future<void> deleteLog(String logId) async {
     if (kIsWeb) {
       await _web!.deleteLog(logId);
@@ -385,18 +399,11 @@ class PlantProvider with ChangeNotifier {
     }
   }
 
-  /// すべての植物の水やり間隔を指定した日数に一括設定する（interval が null の植物もセット）
+  /// すべての植物の水やり間隔を指定日数に一括設定する。
   Future<void> bulkUpdateWateringInterval(int days) async {
     for (final plant in _plants) {
-      final updated = Plant(
-        id: plant.id,
-        name: plant.name,
-        variety: plant.variety,
-        purchaseDate: plant.purchaseDate,
-        purchaseLocation: plant.purchaseLocation,
-        imagePath: plant.imagePath,
+      final updated = plant.copyWith(
         wateringIntervalDays: days,
-        createdAt: plant.createdAt,
         updatedAt: DateTime.now(),
       );
       if (kIsWeb) {
@@ -408,21 +415,14 @@ class PlantProvider with ChangeNotifier {
     await loadPlants();
   }
 
-  /// 水やり間隔が設定されている植物のみ、現在値に delta を加算して一括調整する
-  /// 結果は最低 1 日にクランプする
+  /// 水やり間隔が設定されている植物のみ、間隔に delta を加算して一括調整する。
+  /// 結果は最低 1 日にクランプする。
   Future<void> bulkAdjustWateringInterval(int delta) async {
     for (final plant in _plants) {
       if (plant.wateringIntervalDays == null) continue;
       final newDays = (plant.wateringIntervalDays! + delta).clamp(1, 9999);
-      final updated = Plant(
-        id: plant.id,
-        name: plant.name,
-        variety: plant.variety,
-        purchaseDate: plant.purchaseDate,
-        purchaseLocation: plant.purchaseLocation,
-        imagePath: plant.imagePath,
+      final updated = plant.copyWith(
         wateringIntervalDays: newDays,
-        createdAt: plant.createdAt,
         updatedAt: DateTime.now(),
       );
       if (kIsWeb) {

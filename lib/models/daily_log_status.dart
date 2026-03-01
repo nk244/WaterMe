@@ -1,6 +1,6 @@
 import '../models/log_entry.dart';
 
-/// Manages log status for plants on a specific date
+/// 特定日における植物ごとのログ状態を保持するクラス
 class DailyLogStatus {
   final Map<String, bool> _watered;
   final Map<String, bool> _fertilized;
@@ -34,7 +34,7 @@ class DailyLogStatus {
   bool get hasAnyRecords =>
       wateredCount > 0 || fertilizedCount > 0 || vitalizedCount > 0;
 
-  /// Updates status for a specific plant and log type
+  /// 指定した植物・ログ種別のステータスを更新する
   void updateStatus(String plantId, LogType logType, bool value) {
     switch (logType) {
       case LogType.watering:
@@ -49,7 +49,7 @@ class DailyLogStatus {
     }
   }
 
-  /// Checks if plant has logs other than the specified type
+  /// 指定した種別以外のログが存在するか確認する
   bool hasOtherLogs(String plantId, LogType excludeType) {
     switch (excludeType) {
       case LogType.watering:
@@ -61,7 +61,7 @@ class DailyLogStatus {
     }
   }
 
-  /// Gets all log types that have records for a plant
+  /// 植物のログが存在するすべての種別を返す
   List<LogType> getActiveLogTypes(String plantId) {
     final types = <LogType>[];
     if (isWatered(plantId)) types.add(LogType.watering);

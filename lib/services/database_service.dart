@@ -5,6 +5,10 @@ import '../models/log_entry.dart';
 import '../models/note.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+/// SQLite データベースへのアクセスを担うサービス。
+///
+/// シングルトンパターンで実装されており、DB接続は遅延初期化される。
+/// Web 環境は非対応（[WebStorageService] を利用）。
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   static Database? _database;
@@ -15,12 +19,14 @@ class DatabaseService {
 
   DatabaseService._internal();
 
+  /// DB インスタンスを遅延初期化して返す。
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
   }
 
+  /// DB ファイルを開き、必要に応じてマイグレーションを実行する。
   Future<Database> _initDatabase() async {
     if (kIsWeb) {
       throw UnsupportedError(
@@ -49,15 +55,15 @@ class DatabaseService {
         }
 
         if (oldVersion < 3) {
-          // add plantIds column to notes (for older DBs)
+          // notes テーブルに plantIds カラムを追加（旧DB向け）
           try {
             await db.execute('ALTER TABLE notes ADD COLUMN plantIds TEXT');
           } catch (_) {
-            // ignore if column already exists
+            // 既にカラムが存在する場合は無視
           }
         }
         if (oldVersion < 4) {
-          // add fertilizer/vitalizer interval columns to plants
+          // plants テーブルに肥料・活力剤の間隔カラムを追加
           for (final col in [
             'fertilizerIntervalDays',
             'fertilizerEveryNWaterings',
@@ -68,7 +74,7 @@ class DatabaseService {
               await db.execute(
                   'ALTER TABLE plants ADD COLUMN $col INTEGER');
             } catch (_) {
-              // ignore if column already exists
+              // 既にカラムが存在する場合は無視
             }
           }
         }
@@ -122,13 +128,16 @@ class DatabaseService {
     ''');
   }
 
-  // Plant CRUD operations
+  // ── Plant CRUD ───────────────────────────────────────────────
+
+  /// 植物を挙録（同一IDが存在する場合は上書き）する。
   Future<void> insertPlant(Plant plant) async {
     final db = await database;
     await db.insert('plants', plant.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// すべての植物を更新日時の降順で取得する。
   Future<List<Plant>> getAllPlants() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('plants',
@@ -136,6 +145,7 @@ class DatabaseService {
     return List.generate(maps.length, (i) => Plant.fromMap(maps[i]));
   }
 
+  /// 指定IDの植物を取得する。存在しない場合は null を返す。
   Future<Plant?> getPlant(String id) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
@@ -147,6 +157,7 @@ class DatabaseService {
     return Plant.fromMap(maps.first);
   }
 
+  /// 植物情報を更新する。
   Future<void> updatePlant(Plant plant) async {
     final db = await database;
     await db.update(
@@ -157,6 +168,7 @@ class DatabaseService {
     );
   }
 
+  /// 指定IDの植物を削除する（関連ログは CASCADE で自動削除）。
   Future<void> deletePlant(String id) async {
     final db = await database;
     await db.delete(
@@ -166,13 +178,16 @@ class DatabaseService {
     );
   }
 
-  // Log CRUD operations
+  // ── Log CRUD ─────────────────────────────────────────────────
+
+  /// ログを挿入する。
   Future<void> insertLog(LogEntry log) async {
     final db = await database;
     await db.insert('logs', log.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// すべてのログを日付の降順で取得する。
   Future<List<LogEntry>> getAllLogs() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
@@ -182,6 +197,7 @@ class DatabaseService {
     return List.generate(maps.length, (i) => LogEntry.fromMap(maps[i]));
   }
 
+  /// 指定植物のログを取得する。
   Future<List<LogEntry>> getLogsByPlant(String plantId) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
@@ -193,6 +209,7 @@ class DatabaseService {
     return List.generate(maps.length, (i) => LogEntry.fromMap(maps[i]));
   }
 
+  /// 指定植物かつ種別のログを取得する。
   Future<List<LogEntry>> getLogsByPlantAndType(
       String plantId, LogType type) async {
     final db = await database;
@@ -224,23 +241,28 @@ class DatabaseService {
     );
   }
 
-  // Notes CRUD operations
+  // ── Notes CRUD ───────────────────────────────────────────────
+
+  /// ノートを挿入する。
   Future<void> insertNote(Note note) async {
     final db = await database;
     await db.insert('notes', note.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// すべてのノートを更新日時の降順で取得する。
   Future<List<Note>> getAllNotes() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('notes', orderBy: 'updatedAt DESC');
     return List.generate(maps.length, (i) => Note.fromMap(maps[i]));
   }
 
+  /// ノート情報を更新する。
   Future<void> updateNote(Note note) async {
     final db = await database;
     await db.update('notes', note.toMap(), where: 'id = ?', whereArgs: [note.id]);
   }
 
+  /// 指定IDのノートを削除する。
   Future<void> deleteNote(String id) async {
     final db = await database;
     await db.delete('notes', where: 'id = ?', whereArgs: [id]);

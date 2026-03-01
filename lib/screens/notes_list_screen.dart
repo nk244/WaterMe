@@ -201,7 +201,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
                 children: [
                   Icon(Icons.menu_book_outlined,
                       size: 72,
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.4)),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4)),
                   const SizedBox(height: 16),
                   Text('まだノートがありません',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -262,7 +262,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
                                 color: Theme.of(context)
                                     .colorScheme
                                     .primary
-                                    .withOpacity(0.4)),
+                                    .withValues(alpha: 0.4)),
                             const SizedBox(height: 16),
                             Text('該当するノートがありません',
                                 style: Theme.of(context).textTheme.titleMedium),
@@ -423,7 +423,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
                                               color: Theme.of(context)
                                                   .colorScheme
                                                   .onSurface
-                                                  .withOpacity(0.5),
+                                                  .withValues(alpha: 0.5),
                                             ),
                                       ),
                                       const SizedBox(width: 8),
@@ -488,7 +488,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .onSurface
-                                                .withOpacity(0.5)),
+                                                .withValues(alpha: 0.5)),
                                         const SizedBox(width: 4),
                                         Text(
                                           '${note.imagePaths.length} 枚',
@@ -499,7 +499,7 @@ class _NotesListScreenState extends State<NotesListScreen> {
                                                 color: Theme.of(context)
                                                     .colorScheme
                                                     .onSurface
-                                                    .withOpacity(0.5),
+                                                    .withValues(alpha: 0.5),
                                               ),
                                         ),
                                       ],

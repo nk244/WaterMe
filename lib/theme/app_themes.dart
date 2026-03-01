@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/app_settings.dart';
 
+/// アプリテーマ定義。
+///
+/// [AppTheme] の列挙値に応じてライト/ダークの [ThemeData] を生成する。
 class AppThemes {
   static ThemeData getLightTheme(AppTheme theme) {
     switch (theme) {
