@@ -29,6 +29,8 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
   final Set<String> _selectedPlantIds = {};
   final Set<LogType> _selectedBulkLogTypes = {LogType.watering};
   final ScrollController _listScrollController = ScrollController();
+  // スワイプ方向：1=右スワイプ（前日）、-1=左スワイプ（翌日）、0=初期
+  int _swipeDirection = 0;
 
   @override
   void initState() {
@@ -105,13 +107,23 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
       
       final nextDay = AppDateUtils.getDateOnly(nextWateringDate);
       
-      // For today, show all plants that need watering today or are overdue
+      // 今日：当日予定 + 今日時点で超過分（nextDay <= today）
       if (AppDateUtils.isSameDay(selectedDay, todayDay)) {
         return !nextDay.isAfter(selectedDay);
       }
-      
-      // For other dates, show plants scheduled for that specific date
-      return nextDay.isAtSameMomentAs(selectedDay) || nextDay.isBefore(selectedDay);
+
+      // 過去の日付：その日の実績把握
+      // → その日が予定日だった植物（ちょうどその日）+ その日時点で超過していた植物（予定日がその日以前）
+      // ※ 記録がある植物は plantsWithRecords で別途カバーされる
+      if (selectedDay.isBefore(todayDay)) {
+        return !nextDay.isAfter(selectedDay);
+      }
+
+      // 未来の日付（#91）：その日に予定が来る植物 + 今日時点ですでに超過している植物
+      // 超過の起算日はあくまで今日（アプリ操作日）とする
+      final isScheduledForDate = nextDay.isAtSameMomentAs(selectedDay);
+      final isAlreadyOverdueToday = nextDay.isBefore(todayDay);
+      return isScheduledForDate || isAlreadyOverdueToday;
     }).toSet();
     
     // Combine both sets and convert to list
@@ -341,8 +353,10 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
           // 左スワイプ → 翌日、右スワイプ → 前日
           if (details.primaryVelocity == null) return;
           if (details.primaryVelocity! < -300) {
+            setState(() => _swipeDirection = -1);
             _changeDate(1);
           } else if (details.primaryVelocity! > 300) {
+            setState(() => _swipeDirection = 1);
             _changeDate(-1);
           }
         },
@@ -540,7 +554,28 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
             _buildDateSelector(isToday),
             if (_logStatus.hasAnyRecords) _buildSummary(),
             Expanded(
-              child: _buildPlantList(plantsForDate, isToday),
+              // スワイプ方向に応じたスライドアニメーションでリストを切り替える
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                transitionBuilder: (child, animation) {
+                  // スワイプ方向に応じてスライド方向を切り替える
+                  final offsetX = _swipeDirection < 0 ? 1.0 : -1.0;
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: Offset(offsetX, 0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOut,
+                    )),
+                    child: child,
+                  );
+                },
+                child: KeyedSubtree(
+                  key: ValueKey(_selectedDate),
+                  child: _buildPlantList(plantsForDate, isToday),
+                ),
+              ),
             ),
           ],
         );
@@ -588,17 +623,37 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
           Expanded(
             child: InkWell(
               onTap: _selectDate,
-              child: Column(
-                children: [
-                  Text(
-                    isToday ? '今日' : AppDateUtils.formatRelativeDate(_selectedDate),
-                    style: Theme.of(context).textTheme.titleLarge,
+              // 日付テキストもスワイプと同期してアニメーション切り替え
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                transitionBuilder: (child, animation) {
+                  final offsetX = _swipeDirection < 0 ? 1.0 : -1.0;
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: Offset(offsetX, 0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOut,
+                    )),
+                    child: child,
+                  );
+                },
+                child: KeyedSubtree(
+                  key: ValueKey(_selectedDate),
+                  child: Column(
+                    children: [
+                      Text(
+                        isToday ? '今日' : AppDateUtils.formatRelativeDate(_selectedDate),
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      Text(
+                        DateFormat('yyyy年M月d日').format(_selectedDate),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
                   ),
-                  Text(
-                    DateFormat('yyyy年M月d日').format(_selectedDate),
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -613,8 +668,16 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
 
   void _changeDate(int days) {
     setState(() {
+      // _swipeDirectionがまだ設定されていない場合（矢印ボタン押下時）はここで設定する
+      if (_swipeDirection == 0) {
+        _swipeDirection = days > 0 ? -1 : 1;
+      }
       _selectedDate = _selectedDate.add(Duration(days: days));
       _selectedPlantIds.clear();
+    });
+    // アニメーション終了後にスワイプ方向をリセット
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() => _swipeDirection = 0);
     });
     _loadTodayLogs();
   }

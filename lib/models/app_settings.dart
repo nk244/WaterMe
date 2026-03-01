@@ -21,8 +21,8 @@ enum PlantSortOrder {
   nameDesc,          // 名前降順
   purchaseDateDesc,  // 購入日が新しい順
   purchaseDateAsc,   // 購入日が古い順
-  createdAtAsc,      // 登録日が古い順
   createdAtDesc,     // 登録日が新しい順
+  createdAtAsc,      // 登録日が古い順
   custom,            // ユーザー指定
 }
 

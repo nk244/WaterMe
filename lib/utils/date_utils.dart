@@ -38,9 +38,9 @@ class AppDateUtils {
     final difference = targetDay.difference(today).inDays;
 
     if (difference == 0) return '今日';
-    if (difference == -1) return '昨日（期限切れ）';
+    if (difference == -1) return '昨日（予定超過）';
     if (difference == 1) return '明日';
-    if (difference < 0) return '${-difference}日前（期限切れ）';
+    if (difference < 0) return '${-difference}日前（予定超過）';
     return '$difference日後';
   }
 
