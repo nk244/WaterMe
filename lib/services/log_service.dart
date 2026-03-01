@@ -1,13 +1,14 @@
 import '../models/log_entry.dart';
 
-/// Service for plant log operations
-/// Provides abstraction layer over storage services
+/// ログ操作を担うサービス。
+///
+/// ストレージサービス（DB/Web）を抽象化するレイヤー。
 class LogService {
   final dynamic _storage;
 
   LogService(this._storage);
 
-  /// Gets logs for a specific plant and log type on a specific date
+  /// 指定植物・種別・日付のログ一覧を取得する。
   Future<List<LogEntry>> getLogsForDate(
     String plantId,
     LogType logType,
@@ -17,7 +18,7 @@ class LogService {
     return _filterLogsByDate(logs, date);
   }
 
-  /// Checks if a plant has any log of given type on a specific date
+  /// 指定植物・種別・日付にログが存在するかチェックする。
   Future<bool> hasLogOnDate(
     String plantId,
     LogType logType,
@@ -27,7 +28,7 @@ class LogService {
     return logs.isNotEmpty;
   }
 
-  /// Deletes all logs of given type for a plant on a specific date
+  /// 指定日付のログをすべて削除する。
   Future<void> deleteLogsForDate(
     String plantId,
     LogType logType,
@@ -39,7 +40,7 @@ class LogService {
     }
   }
 
-  /// Filters logs to only include those on the specified date
+  /// 指定日のログのみをフィルタリングする。
   List<LogEntry> _filterLogsByDate(List<LogEntry> logs, DateTime date) {
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59);

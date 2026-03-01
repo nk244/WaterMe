@@ -36,7 +36,7 @@ class MyApp extends StatelessWidget {
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settingsProvider, _) {
-          // Map ThemePreference to Flutter ThemeMode
+          // ThemePreference → Flutter ThemeMode に変換
           ThemeMode mode;
           switch (settingsProvider.themePreference) {
             case ThemePreference.light:
@@ -51,7 +51,7 @@ class MyApp extends StatelessWidget {
           }
 
           return MaterialApp(
-            title: 'WaterMe',
+            title: 'Botanote',
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,

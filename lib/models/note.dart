@@ -1,16 +1,24 @@
-// copyWith の sentinel 値（content を明示的に null にしたい場合に使用）
+import 'dart:convert';
+
+/// copyWith で content を明示的に null にするための sentinel 値
 const Object _sentinel = Object();
 
+/// ノート（日記）データモデル
 class Note {
   final String id;
   final String title;
   final String? content;
+
+  /// 添付画像のファイルパスリスト
   final List<String> imagePaths;
+
+  /// 関連する植物IDリスト
   final List<String> plantIds;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  Note({
+  const Note({
     required this.id,
     required this.title,
     this.content,
@@ -20,35 +28,51 @@ class Note {
     required this.updatedAt,
   });
 
+  /// DBへの保存用 Map に変換する。
+  /// リスト型フィールドは JSON 文字列にエンコードする。
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'title': title,
       'content': content,
-      'imagePaths': imagePaths.join('|'),
-      'plantIds': plantIds.join('|'),
+      'imagePaths': jsonEncode(imagePaths),
+      'plantIds': jsonEncode(plantIds),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
+  /// DB から取得した Map を Note に変換する。
   factory Note.fromMap(Map<String, dynamic> map) {
+    // 旧フォーマット（|区切り文字列）との後方互換性を保つ
+    List<String> parseList(dynamic raw) {
+      if (raw == null || (raw is String && raw.isEmpty)) return [];
+      if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) return List<String>.from(decoded);
+        } catch (_) {
+          // 旧フォーマット（|区切り）のフォールバック
+          return raw.split('|').where((s) => s.isNotEmpty).toList();
+        }
+      }
+      return [];
+    }
+
     return Note(
-      id: map['id'],
-      title: map['title'],
-      content: map['content'],
-      imagePaths: map['imagePaths'] != null && map['imagePaths'].isNotEmpty
-          ? (map['imagePaths'] as String).split('|')
-          : [],
-      plantIds: map['plantIds'] != null && map['plantIds'].isNotEmpty
-          ? (map['plantIds'] as String).split('|')
-          : [],
-      createdAt: DateTime.parse(map['createdAt']),
-      updatedAt: DateTime.parse(map['updatedAt']),
+      id: map['id'] as String,
+      title: map['title'] as String,
+      content: map['content'] as String?,
+      imagePaths: parseList(map['imagePaths']),
+      plantIds: parseList(map['plantIds']),
+      createdAt: DateTime.parse(map['createdAt'] as String),
+      updatedAt: DateTime.parse(map['updatedAt'] as String),
     );
   }
 
-  // sentinel: content を明示的に null (削除) にしたい場合は clearContent: true を渡す
+  /// フィールドを部分的に更新した新しい Note を返す。
+  /// [content] を明示的に null にしたい場合は `content: null` を渡す
+  /// （sentinel パターンにより null と「未指定」を区別する）。
   Note copyWith({
     String? title,
     Object? content = _sentinel,

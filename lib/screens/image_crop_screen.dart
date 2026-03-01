@@ -22,13 +22,11 @@ class ImageCropScreen extends StatefulWidget {
   /// Web用: ImagePickerで取得したXFile
   final XFile? xFile;
 
-  const ImageCropScreen.mobile({super.key, required String imagePath})
-      : imagePath = imagePath,
-        xFile = null;
+  const ImageCropScreen.mobile({super.key, required this.imagePath})
+      : xFile = null;
 
-  const ImageCropScreen.web({super.key, required XFile xFile})
-      : xFile = xFile,
-        imagePath = null;
+  const ImageCropScreen.web({super.key, required this.xFile})
+      : imagePath = null;
 
   @override
   State<ImageCropScreen> createState() => _ImageCropScreenState();

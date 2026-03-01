@@ -506,7 +506,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
                   shape: BoxShape.circle,
                 ),
                 todayDecoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.5),
+                  color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -735,7 +735,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
           ),
         ),
       ),
@@ -789,7 +789,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
           Icon(
             Icons.eco_outlined,
             size: 64,
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           Text(
@@ -855,7 +855,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
         color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -942,7 +942,7 @@ class _TodayWateringScreenState extends State<TodayWateringScreen> {
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       elevation: isSelected ? 4 : 1,
       color: isSelected
-          ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
           : null,
       child: ListTile(
         leading: Row(

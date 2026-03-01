@@ -292,7 +292,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
                       width: 2,
                     ),
                   ),
@@ -489,7 +489,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     if (intervalDays != null) {
       subtitle = '$intervalDays日ごと';
     } else if (everyNWaterings != null) {
-      subtitle = '水やり${everyNWaterings}回に1回';
+      subtitle = '水やり$everyNWaterings回に1回';
     } else {
       subtitle = '未設定';
     }
@@ -652,14 +652,14 @@ class _LogIntervalDialogState extends State<_LogIntervalDialog> {
               onChanged: (v) => setState(() => _days = v.toInt()),
             ),
           ] else ...[
-            Text('水やり${_everyN}回に1回',
+            Text('水やり$_everyN回に1回',
                 style: Theme.of(context).textTheme.headlineSmall),
             Slider(
               value: _everyN.toDouble(),
               min: 2,
               max: 10,
               divisions: 8,
-              label: '${_everyN}回に1回',
+              label: '$_everyN回に1回',
               onChanged: (v) => setState(() => _everyN = v.toInt()),
             ),
             if (widget.wateringIntervalDays != null)

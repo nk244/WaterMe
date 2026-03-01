@@ -19,8 +19,8 @@ import 'database_service.dart';
 ///   waterme_backup_XXXXXX.zip
 ///   ├── data.json          # Plants / Logs / Notes (imagePath は ZIP 内相対パス)
 ///   └── images/
-///       ├── plants/<plant_id>.jpg
-///       └── notes/<note_id>_<index>.jpg
+///       ├── plants/`plant_id`.jpg
+///       └── notes/`note_id`_`index`.jpg
 ///
 /// Web: テキスト JSON のみ（画像なし）。
 class ExportService {

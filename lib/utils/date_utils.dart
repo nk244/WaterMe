@@ -1,23 +1,23 @@
 import 'package:intl/intl.dart';
 
-/// Date utility functions for the app
+/// 日付操作のユーティリティクラス
 class AppDateUtils {
-  /// Returns start of day (00:00:00) for given date
+  /// 指定日の日の始まり（00:00:00）を返す。
   static DateTime getStartOfDay(DateTime date) {
     return DateTime(date.year, date.month, date.day);
   }
 
-  /// Returns end of day (23:59:59) for given date
+  /// 指定日の日の終わり（23:59:59）を返す。
   static DateTime getEndOfDay(DateTime date) {
     return DateTime(date.year, date.month, date.day, 23, 59, 59);
   }
 
-  /// Returns date without time component
+  /// 時刻情報を除いた日付のみを返す。
   static DateTime getDateOnly(DateTime date) {
     return DateTime(date.year, date.month, date.day);
   }
 
-  /// Formats date as relative string (今日, 昨日, 明日, etc.)
+  /// 相対日付文字列（今日・昨日・明日 等）にフォーマットする。
   static String formatRelativeDate(DateTime date) {
     final now = DateTime.now();
     final today = getDateOnly(now);
@@ -30,7 +30,7 @@ class AppDateUtils {
     return DateFormat('M月d日').format(date);
   }
 
-  /// Formats date difference with overdue indication
+  /// 日付差を文字列化する。期限切れの場合は文言を付加する。
   static String formatDateDifference(DateTime date) {
     final now = DateTime.now();
     final today = getDateOnly(now);
@@ -44,7 +44,7 @@ class AppDateUtils {
     return '$difference日後';
   }
 
-  /// Checks if two dates are on the same day
+  /// 2つの日時が同じ日かチェックする。
   static bool isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
